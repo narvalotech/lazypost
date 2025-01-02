@@ -26,7 +26,12 @@
 
 (defun send-postcard (postcard)
   "Send a delayed postcard. Only accepts text."
-  (format t "~A~%" (pprint-postcard postcard)))
+  (push postcard *the-post*))
+
+(defun deliver-postcard (postcard)
+  (format t "##### You've got mail. #####~%~A~%~%" (pprint-postcard postcard)))
+
+(setf *the-post* nil)
 
 (send-postcard
  '(:text
@@ -40,30 +45,47 @@ xoxo Matt"
 
    :src-email "matt.smith@gmail.com"
    :dst-email "john.smith@hostmail.com"
-   ))
-; Oslo, Norway -> Denver, USA
-; matt.smith@gmail.com -> john.smith@hostmail.com
-; Hello from Oslo!
-; Made a new friend, Ole nordmann.
 
-; xoxo Matt
-;  => NIL
+   :sent-date "2024-12-24"
+   :delivery-date "2025-01-02"
+   ))
+
+(send-postcard
+ '(:text
+   "Greetings from New York!
+Hope everything is alright.
+
+- John"
+
+   :src-city "New York, USA"
+   :dst-city "Denver, USA"
+
+   :src-email "john.smith@hostmail.com"
+   :dst-email "matt.smith@gmail.com"
+
+   :sent-date "2024-12-18"
+   :delivery-date "2025-01-02"
+   ))
 
 (defun send-scheduled-postcards (db time)
-  (format t "Sending...~%"))
+  (declare (ignore time))
+  (format t "Delivering today's letters...~%")
+  (let ((postcard (pop db)))
+    (when postcard
+      (deliver-postcard postcard)))
+  db)
 
 (ql:quickload :local-time)
-
-(defun send-thread-cycle (db)
-  (let ((current-time (local-time:now)))
-    (send-scheduled-postcards db current-time)
-    (sleep 5)))
-
 (ql:quickload :bordeaux-threads)
+
+(defparameter *send-interval-s* 5)
 
 (defparameter *send-thread*
   (bt:make-thread
-   (lambda () (loop while t do
-                    (send-thread-cycle *the-post*)))
+   (lambda ()
+     (loop while t do
+       (let ((current-time (local-time:now)))
+         (setf *the-post*
+               (send-scheduled-postcards *the-post* current-time))
+         (sleep *send-interval-s*))))
    :name "Postman thread"))
-(bt:join-thread *send-thread*)
