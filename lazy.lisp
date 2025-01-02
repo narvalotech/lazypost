@@ -3,29 +3,44 @@
 
 (defparameter *the-post* nil)
 
-(defun send-postcard (text
-                      src-city
-                      dst-city
-                      src-email
-                      dst-email)
+(defun read-postcard (postcard)
+  (let ((text (getf postcard :text))
+        (src-city (getf postcard :src-city))
+        (dst-city (getf postcard :dst-city))
+        (src-email (getf postcard :src-email))
+        (dst-email (getf postcard :dst-email)))
+    (list text src-city dst-city src-email dst-email)))
+
+(defun pprint-postcard (postcard)
+  (destructuring-bind (text
+                       src-city
+                       dst-city
+                       src-email
+                       dst-email)
+      (read-postcard postcard)
+    (with-output-to-string (s)
+      "Send a delayed postcard. Only accepts text."
+      (format s "~A -> ~A~%" src-city dst-city)
+      (format s "~A -> ~A~%" src-email dst-email)
+      (format s "~A" text))))
+
+(defun send-postcard (postcard)
   "Send a delayed postcard. Only accepts text."
-  (format t "~A -> ~A~%" src-city dst-city)
-  (format t "~A -> ~A~%" src-email dst-email)
-  (format t "~A~%" text)
-  )
+  (format t "~A~%" (pprint-postcard postcard)))
 
 (send-postcard
- "Hello from Oslo!
+ '(:text
+   "Hello from Oslo!
 Made a new friend, Ole nordmann.
 
 xoxo Matt"
 
- "Oslo, Norway"
- "Denver, USA"
+   :src-city "Oslo, Norway"
+   :dst-city "Denver, USA"
 
- "matt.smith@gmail.com"
- "john.smith@hostmail.com"
- )
+   :src-email "matt.smith@gmail.com"
+   :dst-email "john.smith@hostmail.com"
+   ))
 ; Oslo, Norway -> Denver, USA
 ; matt.smith@gmail.com -> john.smith@hostmail.com
 ; Hello from Oslo!
