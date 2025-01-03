@@ -69,6 +69,8 @@ Hope everything is alright.
 
 (defparameter *date-count* 0)
 
+(ql:quickload :local-time)
+
 (defun make-fake-date (time)
   (incf *date-count*)
   (local-time:timestamp+ time *date-count* :day))
@@ -86,7 +88,6 @@ Hope everything is alright.
                 (progn (deliver-postcard postcard) nil)
                 (list postcard))))))
 
-(ql:quickload :local-time)
 (ql:quickload :bordeaux-threads)
 
 (defparameter *send-interval-s* 1)
