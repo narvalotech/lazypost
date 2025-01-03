@@ -31,56 +31,68 @@
 (defun deliver-postcard (postcard)
   (format t "##### You've got mail. #####~%~A~%~%" (pprint-postcard postcard)))
 
-(setf *the-post* nil)
-
-(send-postcard
- '(:text
-   "Hello from Oslo!
+(progn
+  (setf *the-post* nil)
+  (send-postcard
+   '(:text
+     "Hello from Oslo!
 Made a new friend, Ole nordmann.
 
 xoxo Matt"
 
-   :src-city "Oslo, Norway"
-   :dst-city "Denver, USA"
+     :src-city "Oslo, Norway"
+     :dst-city "Denver, USA"
 
-   :src-email "matt.smith@gmail.com"
-   :dst-email "john.smith@hostmail.com"
+     :src-email "matt.smith@gmail.com"
+     :dst-email "john.smith@hostmail.com"
 
-   :sent-date "2024-12-24"
-   :delivery-date "2025-01-02"
-   ))
-
-(send-postcard
- '(:text
-   "Greetings from New York!
+     :sent-date "2024-12-24"
+     :delivery-date "2025-01-10"
+     ))
+  (send-postcard
+   '(:text
+     "Greetings from New York!
 Hope everything is alright.
 
 - John"
 
-   :src-city "New York, USA"
-   :dst-city "Denver, USA"
+     :src-city "New York, USA"
+     :dst-city "Denver, USA"
 
-   :src-email "john.smith@hostmail.com"
-   :dst-email "matt.smith@gmail.com"
+     :src-email "john.smith@hostmail.com"
+     :dst-email "matt.smith@gmail.com"
 
-   :sent-date "2024-12-18"
-   :delivery-date "2025-01-02"
-   ))
+     :sent-date "2024-12-18"
+     :delivery-date "2024-12-25"
+     ))
+  )
+
+(defparameter *date-count* 0)
+
+(defun make-fake-date (time)
+  (incf *date-count*)
+  (local-time:timestamp+ time *date-count* :day))
+
+(defun get-delivery-date (postcard)
+  (local-time:parse-timestring (getf postcard :delivery-date)))
 
 (defun send-scheduled-postcards (db time)
-  (declare (ignore time))
-  (format t "Delivering today's letters...~%")
-  (let ((postcard (pop db)))
-    (when postcard
-      (deliver-postcard postcard)))
-  db)
+  (let ((fake-date (make-fake-date time)))
+    (format t "Delivering today's letters (~A)...~%" fake-date)
+    (loop for postcard in db
+          append
+          (when postcard
+            (if (local-time:timestamp>= fake-date (get-delivery-date postcard))
+                (progn (deliver-postcard postcard) nil)
+                (list postcard))))))
 
 (ql:quickload :local-time)
 (ql:quickload :bordeaux-threads)
 
-(defparameter *send-interval-s* 5)
+(defparameter *send-interval-s* 1)
 
-(defparameter *send-thread*
+(progn
+  (setf *date-count* 0)
   (bt:make-thread
    (lambda ()
      (loop while t do
