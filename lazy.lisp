@@ -102,3 +102,29 @@ Hope everything is alright.
                (send-scheduled-postcards *the-post* current-time))
          (sleep *send-interval-s*))))
    :name "Postman thread"))
+
+(ql:quickload "read-csv")
+
+(defun read-country-db ()
+  (let ((csv
+          (with-open-file (stream "~/repos/lazypost/coutries-and-states.csv")
+            (read-csv:parse-csv stream #\,))))
+    (loop for country in (cdr csv)
+          collect
+          (list
+           :code (nth 0 country)
+           :name (nth 3 country)
+           :is-state (equalp "1" (nth 4 country))
+           :lat (nth 1 country)
+           :long (nth 2 country)))))
+
+(defparameter *country-db* (read-country-db))
+
+(defun find-country (db name)
+  (find-if (lambda (country) (search name (getf country :name))) db))
+
+(find-country *country-db* "Lou")
+ ; => (:CODE "LA" :NAME "Louisiana" :IS-STATE T :LAT "31.244823" :LONG "-92.145024")
+
+(find-country *country-db* "Norway")
+ ; => (:CODE "NO" :NAME "Norway" :IS-STATE NIL :LAT "60.472024" :LONG "8.468946")
