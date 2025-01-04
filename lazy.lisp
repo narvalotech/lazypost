@@ -189,3 +189,52 @@ Hope everything is alright.
   (find-country *country-db* "Norway")
   (find-country *country-db* "Sweden")))
  ; => 2.044138247852018d0
+
+(defun rand-country (db)
+  (let* ((len (length db))
+         (index (random len)))
+    (getf (nth index db) :name)))
+
+(rand-country *country-db*)
+ ; => "Philippines"
+
+(defparameter *names*
+  '("Todd"
+    "Julian"
+    "Peter"
+    "Susan"
+    "Tasha"
+    "Annie"
+    "Sarah"))
+
+(defparameter *greetings*
+  '(("Hello" "See ya")
+    ("Hola" "Hasta la proxima")
+    ("Greetings" "Love")))
+
+(defun generate-letter ()
+  (let ((src-country (rand-country *country-db*))
+        (dst-country (rand-country *country-db*))
+        (src-name (nth (random (length *names*)) *names*))
+        (dst-name (nth (random (length *names*)) *names*))
+        (greeting (nth (random (length *greetings*)) *greetings*)))
+    (list
+     ;; TODO: use country instead of city
+     :src-city src-country
+     :dst-city dst-country
+     :src-email (format nil "~A@lazypost.net" src-name)
+     :dst-email (format nil "~A@lazypost.net" dst-name)
+     :sent-date "2025-01-01"            ; this isn't used yet
+     :text
+     (format nil "~A from ~A!~%~%~A, ~A"
+             (nth 0 greeting)
+             src-country
+             (nth 1 greeting)
+             dst-name))))
+
+(generate-letter)
+;  => (:SRC-CITY "Estonia" :DST-CITY "Colombia" :SRC-EMAIL "Susan@lazypost.net"
+;  :DST-EMAIL "Peter@lazypost.net" :SENT-DATE "2025-01-01" :TEXT
+;  "Greetings from Estonia!
+
+; Love, Peter")
