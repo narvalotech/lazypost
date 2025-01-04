@@ -224,7 +224,6 @@ Hope everything is alright.
      :dst-country dst-country
      :src-email (format nil "~A@lazypost.net" src-name)
      :dst-email (format nil "~A@lazypost.net" dst-name)
-     :sent-date "2025-01-01"            ; this isn't used yet
      :text
      (format nil "~A from ~A!~%~%~A, ~A"
              (nth 0 greeting)
@@ -233,8 +232,9 @@ Hope everything is alright.
              dst-name))))
 
 (generate-letter)
-;  => (:SRC-COUNTRY "Estonia" :DST-COUNTRY "Colombia" :SRC-EMAIL "Susan@lazypost.net"
-;  :DST-EMAIL "Peter@lazypost.net" :SENT-DATE "2025-01-01" :TEXT
-;  "Greetings from Estonia!
+;  => (:SRC-COUNTRY "Nebraska" :DST-COUNTRY "South Dakota" :SRC-EMAIL
+;  "Peter@lazypost.net" :DST-EMAIL "Sarah@lazypost.net" :TEXT
+;  "Hello from Nebraska!
 
-; Love, Peter")
+; See ya, Sarah")
+
