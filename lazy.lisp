@@ -176,19 +176,19 @@ Hope everything is alright.
 
 (defun delivery-time (distance-km)
   "Estimate delivery time (in days) given a distance (in km)"
-  (* *days-per-km* distance-km))
+  (round (* *days-per-km* distance-km)))
 
 (delivery-time
  (country-distance
   (find-country *country-db* "Norway")
   (find-country *country-db* "Hawaii")))
- ; => 39.93141988370429d0
+ ; => 40, -0.06858011629571337d0
 
 (delivery-time
  (country-distance
   (find-country *country-db* "Norway")
   (find-country *country-db* "Sweden")))
- ; => 2.044138247852018d0
+ ; => 2, 0.04413824785201781d0
 
 (defun rand-country (db)
   (let* ((len (length db))
