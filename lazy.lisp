@@ -128,3 +128,64 @@ Hope everything is alright.
 
 (find-country *country-db* "Norway")
  ; => (:CODE "NO" :NAME "Norway" :IS-STATE NIL :LAT 60.472023 :LON 8.468946)
+
+(defun d2r (degrees)
+  "Converts degrees to radians"
+  (* degrees (/ pi 180)))
+
+(d2r 180)
+ ; => 3.141592653589793d0
+
+(defun r2d (radians)
+  (* radians (/ 180 pi)))
+
+(r2d (/ pi 2))
+ ; => 90.0d0
+
+;; From https://stackoverflow.com/a/3694410
+(defun distance? (lat1 lon1 lat2 lon2)
+  (let* ((theta (- lon1 lon2))
+         (dist (+
+                (* (sin (d2r lat1))
+                   (sin (d2r lat2)))
+                (* (cos (d2r lat1))
+                   (cos (d2r lat2))
+                   (cos (d2r theta))))))
+    (setf dist (acos dist))
+    (setf dist (r2d dist))
+    (setf dist (* dist 60 1.1515))
+    ;; convert to kilometers
+    (setf dist (* dist 1.609344))
+    dist))
+
+(defun country-distance (c1 c2)
+  "Calculate straight-line distance between two countries"
+  (let ((lat1 (getf c1 :lat))
+        (lon1 (getf c1 :lon))
+        (lat2 (getf c2 :lat))
+        (lon2 (getf c2 :lon)))
+    (distance? lat1 lon1 lat2 lon2)))
+
+(country-distance
+ (find-country *country-db* "Norway")
+ (find-country *country-db* "Hawaii"))
+ ; => 10963.836852735742d0
+
+;; ~30 days for a letter to go from US to Germany by boat
+(defparameter *days-per-km* (/ 30 8237))
+
+(defun delivery-time (distance-km)
+  "Estimate delivery time (in days) given a distance (in km)"
+  (* *days-per-km* distance-km))
+
+(delivery-time
+ (country-distance
+  (find-country *country-db* "Norway")
+  (find-country *country-db* "Hawaii")))
+ ; => 39.93141988370429d0
+
+(delivery-time
+ (country-distance
+  (find-country *country-db* "Norway")
+  (find-country *country-db* "Sweden")))
+ ; => 2.044138247852018d0
