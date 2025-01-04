@@ -238,3 +238,34 @@ Hope everything is alright.
 
 ; See ya, Sarah")
 
+(defun format-date (time)
+  (local-time:format-timestring
+   nil
+   time
+   :format
+   '(:year "-"
+     (:month 2) "-"
+     (:day 2))))
+
+(defun add-dates (postcard)
+  (let ((datestr (format-date
+                  (local-time:timestamp+
+                   (local-time:now)
+                   (delivery-time
+                    (country-distance
+                     (find-country *country-db* (getf postcard :src-country))
+                     (find-country *country-db* (getf postcard :dst-country))))
+                   :day))))
+    (setf (getf postcard :sent-date) (format-date (local-time:now)))
+    (setf (getf postcard :delivery-date) datestr)
+    postcard))
+
+(add-dates (generate-letter))
+;  => (:DELIVERY-DATE "2025-02-05" :SENT-DATE "2025-01-04" :SRC-COUNTRY "Mali"
+;  :DST-COUNTRY "British Indian Ocean Territory" :SRC-EMAIL "Tasha@lazypost.net"
+;  :DST-EMAIL "Susan@lazypost.net" :TEXT "Greetings from Mali!
+
+; Love, Susan")
+
+(loop for i from 0 to 40 collect
+      (send-postcard (add-dates (generate-letter))))
