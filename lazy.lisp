@@ -115,8 +115,8 @@ Hope everything is alright.
            :code (nth 0 country)
            :name (nth 3 country)
            :is-state (equalp "1" (nth 4 country))
-           :lat (nth 1 country)
-           :long (nth 2 country)))))
+           :lat (read-from-string (nth 1 country))
+           :lon (read-from-string (nth 2 country))))))
 
 (defparameter *country-db* (read-country-db))
 
@@ -124,7 +124,7 @@ Hope everything is alright.
   (find-if (lambda (country) (search name (getf country :name))) db))
 
 (find-country *country-db* "Lou")
- ; => (:CODE "LA" :NAME "Louisiana" :IS-STATE T :LAT "31.244823" :LONG "-92.145024")
+ ; => (:CODE "LA" :NAME "Louisiana" :IS-STATE T :LAT 31.244823 :LON -92.14503)
 
 (find-country *country-db* "Norway")
- ; => (:CODE "NO" :NAME "Norway" :IS-STATE NIL :LAT "60.472024" :LONG "8.468946")
+ ; => (:CODE "NO" :NAME "Norway" :IS-STATE NIL :LAT 60.472023 :LON 8.468946)
