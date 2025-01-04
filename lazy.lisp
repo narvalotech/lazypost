@@ -5,22 +5,22 @@
 
 (defun read-postcard (postcard)
   (let ((text (getf postcard :text))
-        (src-city (getf postcard :src-city))
-        (dst-city (getf postcard :dst-city))
+        (src-country (getf postcard :src-country))
+        (dst-country (getf postcard :dst-country))
         (src-email (getf postcard :src-email))
         (dst-email (getf postcard :dst-email)))
-    (list text src-city dst-city src-email dst-email)))
+    (list text src-country dst-country src-email dst-email)))
 
 (defun pprint-postcard (postcard)
   (destructuring-bind (text
-                       src-city
-                       dst-city
+                       src-country
+                       dst-country
                        src-email
                        dst-email)
       (read-postcard postcard)
     (with-output-to-string (s)
       "Send a delayed postcard. Only accepts text."
-      (format s "~A -> ~A~%" src-city dst-city)
+      (format s "~A -> ~A~%" src-country dst-country)
       (format s "~A -> ~A~%" src-email dst-email)
       (format s "~A" text))))
 
@@ -40,8 +40,8 @@ Made a new friend, Ole nordmann.
 
 xoxo Matt"
 
-     :src-city "Oslo, Norway"
-     :dst-city "Denver, USA"
+     :src-country "Oslo, Norway"
+     :dst-country "Denver, USA"
 
      :src-email "matt.smith@gmail.com"
      :dst-email "john.smith@hostmail.com"
@@ -56,8 +56,8 @@ Hope everything is alright.
 
 - John"
 
-     :src-city "New York, USA"
-     :dst-city "Denver, USA"
+     :src-country "New York, USA"
+     :dst-country "Denver, USA"
 
      :src-email "john.smith@hostmail.com"
      :dst-email "matt.smith@gmail.com"
@@ -220,8 +220,8 @@ Hope everything is alright.
         (greeting (nth (random (length *greetings*)) *greetings*)))
     (list
      ;; TODO: use country instead of city
-     :src-city src-country
-     :dst-city dst-country
+     :src-country src-country
+     :dst-country dst-country
      :src-email (format nil "~A@lazypost.net" src-name)
      :dst-email (format nil "~A@lazypost.net" dst-name)
      :sent-date "2025-01-01"            ; this isn't used yet
@@ -233,7 +233,7 @@ Hope everything is alright.
              dst-name))))
 
 (generate-letter)
-;  => (:SRC-CITY "Estonia" :DST-CITY "Colombia" :SRC-EMAIL "Susan@lazypost.net"
+;  => (:SRC-COUNTRY "Estonia" :DST-COUNTRY "Colombia" :SRC-EMAIL "Susan@lazypost.net"
 ;  :DST-EMAIL "Peter@lazypost.net" :SENT-DATE "2025-01-01" :TEXT
 ;  "Greetings from Estonia!
 
