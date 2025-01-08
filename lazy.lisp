@@ -271,3 +271,84 @@ Hope everything is alright.
 
 ;; (loop for i from 0 to 40 collect
 ;;       (send-postcard (add-dates (generate-letter))))
+
+;; TODO: use something with less deps than spinneret
+(ql:quickload :spinneret)
+
+(defmacro form-item (class name text &key is-email)
+  (spinneret:with-html-string
+    (:div :class class
+     (:label :for name text)
+     (:input :type (if is-email :email :text)
+             :name name :id name :required t))))
+
+(defun handle-send (env)
+  (declare (ignore env))
+  (list
+   200
+   '(:content-type "text/html")
+   (list
+    (spinneret:with-html-string
+      (:doctype)
+      (:head
+       (:title "The Lazy Post Company"))
+      (:body
+       (:form
+        :action "#" :method :post :class "form-example"
+        (:raw
+         (form-item "form-example" "destination" "Destination country")
+         (form-item "form-example" "origin" "Origin country")
+         (form-item "form-example" "email-from" "Your email" :is-email t)
+         (form-item "form-example" "email-to" "Destination email" :is-email t)
+         (form-item "form-example" "message" "Message"))
+        (:div
+         :class "form-example"
+         (:input :type :submit :value "Send"))))
+      ))))
+
+(defun handle-error ()
+  (list 400 '(:content-type "text/plain; charset=utf-8")
+        '("[400] oh noes!")))
+
+(ql:quickload :cl-utilities)
+(ql:quickload :quri)
+
+(defun parse-keyword (string)
+  (intern (string-upcase string) :keyword))
+
+(defun decode-url-params (url)
+  "Decode URL-encoded (and escaped) parameters to a param-list"
+  (reduce #'append
+          (mapcar (lambda (p)
+                    (list (parse-keyword (car p))
+                          (car
+                           (cl-utilities:split-sequence
+                            #\Comma
+                            (remove-if (lambda (c) (char-equal #\" c)) (cdr p))))))
+                  (quri:url-decode-params url))))
+
+(defun post-post (stream)
+  (let* ((urlencoded (babel:octets-to-string
+               (alexandria:read-stream-content-into-byte-vector stream)))
+         (params (decode-url-params urlencoded)))
+    ;; (break)
+    (format t "Urlencoded ~A~%Params ~A~%" urlencoded params)))
+
+(defun response (env)
+  ;; (format t "query-string: ~A~%" (getf env :query-string))
+  ;; (break)
+
+  (when (eql :post (getf env :request-method))
+    (post-post (getf env :raw-body)))
+
+  (unless (eql :get (getf env :request-method))
+    (handle-error))
+
+  ;; Handle GET requests
+  (cond ((equalp "/send" (getf env :path-info))
+         (handle-send env))
+        (t (handle-error))))
+
+(ql:quickload :clack)
+
+(defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port 8000))
