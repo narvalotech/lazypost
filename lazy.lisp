@@ -94,16 +94,16 @@ Hope everything is alright.
 
 (defparameter *send-interval-s* 1)
 
-(progn
-  (setf *date-count* 0)
-  (bt:make-thread
-   (lambda ()
-     (loop while t do
-       (let ((current-time (local-time:now)))
-         (setf *the-post*
-               (send-scheduled-postcards *the-post* current-time))
-         (sleep *send-interval-s*))))
-   :name "Postman thread"))
+;; (progn
+;;   (setf *date-count* 0)
+;;   (bt:make-thread
+;;    (lambda ()
+;;      (loop while t do
+;;        (let ((current-time (local-time:now)))
+;;          (setf *the-post*
+;;                (send-scheduled-postcards *the-post* current-time))
+;;          (sleep *send-interval-s*))))
+;;    :name "Postman thread"))
 
 (ql:quickload "read-csv")
 
@@ -269,5 +269,5 @@ Hope everything is alright.
 
 ; Love, Susan")
 
-(loop for i from 0 to 40 collect
-      (send-postcard (add-dates (generate-letter))))
+;; (loop for i from 0 to 40 collect
+;;       (send-postcard (add-dates (generate-letter))))
