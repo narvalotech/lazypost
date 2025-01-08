@@ -1,6 +1,8 @@
 (defun get-form ()
   "this is a form")
 
+(declaim (optimize (debug 3) (space 0) (speed 0)))
+
 (defparameter *the-post* nil)
 
 (defun read-postcard (postcard)
