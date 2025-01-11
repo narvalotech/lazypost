@@ -275,6 +275,14 @@ Hope everything is alright.
 ;; TODO: use something with less deps than spinneret
 (ql:quickload :spinneret)
 
+(defmacro form-image (class name text)
+  (spinneret:with-html-string
+    (:div :class class
+     (:label :for name text)
+     (:input :type :file
+             :name name :id name
+             :accept "image/jpeg"))))
+
 (defmacro form-item (class name text &key is-email)
   (spinneret:with-html-string
     (:div :class class
@@ -294,13 +302,14 @@ Hope everything is alright.
        (:title "The Lazy Post Company"))
       (:body
        (:form
-        :action "#" :method :post :class "form-example"
+        :action "#" :method :post :class "form-example" :enctype "multipart/form-data"
         (:raw
-         (form-item "form-example" "destination" "Destination country")
-         (form-item "form-example" "origin" "Origin country")
-         (form-item "form-example" "email-from" "Your email" :is-email t)
-         (form-item "form-example" "email-to" "Destination email" :is-email t)
-         (form-item "form-example" "message" "Message"))
+         ;; (form-item "form-example" "destination" "Destination country")
+         ;; (form-item "form-example" "origin" "Origin country")
+         ;; (form-item "form-example" "email-from" "Your email" :is-email t)
+         ;; (form-item "form-example" "email-to" "Destination email" :is-email t)
+         ;; (form-item "form-example" "message" "Message")
+         (form-image "form-example" "picture" "Picture"))
         (:div
          :class "form-example"
          (:input :type :submit :value "Send"))))
@@ -316,8 +325,27 @@ Hope everything is alright.
 (defun parse-keyword (string)
   (intern (string-upcase string) :keyword))
 
+(ql:quickload :http-body)
+
+(defun vector-to-stream (vector)
+  (flex:make-in-memory-input-stream vector))
+
+(let ((stream (vector-to-stream *test*)))
+      (http-body:parse "multipart/form-data; boundary=---------------------------94167147537850978141232532277"
+                       4193324 stream))
+
+(defparameter *test-image-stream* *)
+(pathname *test-image-stream*)
+
+(with-open-file (output "output.jpg"
+                       :direction :output
+                       :element-type '(unsigned-byte 8)
+                       :if-exists :supersede)
+  (uiop:copy-stream-to-stream *test-image-stream* output :element-type '(unsigned-byte 8)))
+
 (defun decode-url-params (url)
   "Decode URL-encoded (and escaped) parameters to a param-list"
+  (break)
   (reduce #'append
           (mapcar (lambda (p)
                     (list (parse-keyword (car p))
@@ -327,19 +355,20 @@ Hope everything is alright.
                             (remove-if (lambda (c) (char-equal #\" c)) (cdr p))))))
                   (quri:url-decode-params url))))
 
-(defun post-post (stream)
-  (let* ((urlencoded (babel:octets-to-string
-               (alexandria:read-stream-content-into-byte-vector stream)))
-         (params (decode-url-params urlencoded)))
-    ;; (break)
-    (format t "Urlencoded ~A~%Params ~A~%" urlencoded params)))
+(defun post-post (env)
+  (let ((params (http-body:parse (getf env :content-type)
+                                 (getf env :content-length)
+                                 (getf env :raw-body))))
+    (break)
+    (format t "~A" params)
+    ))
 
 (defun response (env)
   ;; (format t "query-string: ~A~%" (getf env :query-string))
   ;; (break)
 
   (when (eql :post (getf env :request-method))
-    (post-post (getf env :raw-body)))
+    (post-post env))
 
   (unless (eql :get (getf env :request-method))
     (handle-error))
