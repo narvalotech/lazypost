@@ -366,3 +366,21 @@ Hope everything is alright.
 (ql:quickload :clack)
 
 (defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port 8000))
+
+(ql:quickload :cl-smtp)
+
+(defun send-email (from name to subject message &optional attachments)
+  (cl-smtp:send-email *smtp-server* *smtp-user* to subject message
+                      :attachments attachments
+                      :cc from
+                      :reply-to from
+                      :display-name name
+                      :authentication (list :login *smtp-user* *smtp-pass*)
+                      :ssl :tls
+                      ))
+
+;; (send-email "random@rico.live"
+;;             "Mailey McEmailface"
+;;             "test@rico.live"
+;;             "Postcard from Mailey"
+;;             "O hai")
