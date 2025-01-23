@@ -308,7 +308,7 @@ Hope everything is alright.
          ;; (form-item "form-example" "origin" "Origin country")
          ;; (form-item "form-example" "email-from" "Your email" :is-email t)
          ;; (form-item "form-example" "email-to" "Destination email" :is-email t)
-         ;; (form-item "form-example" "message" "Message")
+         (form-item "form-example" "message" "Message")
          (form-image "form-example" "picture" "Picture"))
         (:div
          :class "form-example"
@@ -319,48 +319,33 @@ Hope everything is alright.
   (list 400 '(:content-type "text/plain; charset=utf-8")
         '("[400] oh noes!")))
 
-(ql:quickload :cl-utilities)
-(ql:quickload :quri)
-
-(defun parse-keyword (string)
-  (intern (string-upcase string) :keyword))
-
 (ql:quickload :http-body)
 
-(defun vector-to-stream (vector)
-  (flex:make-in-memory-input-stream vector))
+(defun param-is-binary? (param)
+  ;; http-body returns a cons if the parameter is text and a list
+  ;; if the param is binary or image.
+  (consp (cdr param)))
 
-(let ((stream (vector-to-stream *test*)))
-      (http-body:parse "multipart/form-data; boundary=---------------------------94167147537850978141232532277"
-                       4193324 stream))
+(defun param-is-text? (param)
+  (not (param-is-binary? param)))
 
-(defparameter *test-image-stream* *)
-(pathname *test-image-stream*)
+(defun param-is-image? (param)
+  (and (param-is-binary? param)
+       (equalp (nth 3 param) "image/jpeg")))
 
-(with-open-file (output "output.jpg"
-                       :direction :output
-                       :element-type '(unsigned-byte 8)
-                       :if-exists :supersede)
-  (uiop:copy-stream-to-stream *test-image-stream* output :element-type '(unsigned-byte 8)))
-
-(defun decode-url-params (url)
-  "Decode URL-encoded (and escaped) parameters to a param-list"
-  (break)
-  (reduce #'append
-          (mapcar (lambda (p)
-                    (list (parse-keyword (car p))
-                          (car
-                           (cl-utilities:split-sequence
-                            #\Comma
-                            (remove-if (lambda (c) (char-equal #\" c)) (cdr p))))))
-                  (quri:url-decode-params url))))
+(defun parse-param (param)
+  (let ((param-type
+          (cond ((param-is-text? param) :text)
+                ((param-is-image? param) :image))))
+    (list param-type param)))
 
 (defun post-post (env)
-  (let ((params (http-body:parse (getf env :content-type)
-                                 (getf env :content-length)
-                                 (getf env :raw-body))))
-    (break)
-    (format t "~A" params)
+  (let* ((params (http-body:parse (getf env :content-type)
+                                  (getf env :content-length)
+                                  (getf env :raw-body)))
+         (parsed (mapcar #'parse-param params)))
+    (format t "input: ~A~%" params)
+    (format t "parsed: ~A~%" parsed)
     ))
 
 (defun response (env)
