@@ -400,16 +400,16 @@ Hope everything is alright.
   ;; (format t "query-string: ~A~%" (getf env :query-string))
   ;; (break)
 
-  (when (eql :post (getf env :request-method))
-    (post-post env))
+  (cond
+    ((eql :post (getf env :request-method))
+     (post-post env))
 
-  (unless (eql :get (getf env :request-method))
-    (handle-error))
+    ((eql :get (getf env :request-method))
+     (cond
+       ((equalp "/send" (getf env :path-info)) (handle-send env))
+       (t (handle-error))))
 
-  ;; Handle GET requests
-  (cond ((equalp "/send" (getf env :path-info))
-         (handle-send env))
-        (t (handle-error))))
+    (t (handle-error))))
 
 (ql:quickload :clack)
 
