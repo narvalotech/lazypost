@@ -5,20 +5,14 @@
 
 (defparameter *the-post* nil)
 
-(defun read-postcard (postcard)
-  (let ((text (getf postcard :text))
-        (src-country (getf postcard :src-country))
-        (dst-country (getf postcard :dst-country))
-        (src-email (getf postcard :src-email))
-        (dst-email (getf postcard :dst-email)))
-    (list text src-country dst-country src-email dst-email)))
-
 (defun pprint-postcard (postcard)
-  (destructuring-bind (text
-                       src-country
-                       dst-country
-                       src-email
-                       dst-email)
+  (destructuring-bind (&key
+                         text
+                         src-country
+                         dst-country
+                         src-email
+                         dst-email
+                       &allow-other-keys)
       (read-postcard postcard)
     (with-output-to-string (s)
       "Send a delayed postcard. Only accepts text."
