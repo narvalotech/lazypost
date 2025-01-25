@@ -391,6 +391,7 @@ Hope everything is alright.
                  (read-param "email-to" parsed)
                  (read-param "message" parsed))))
               (postcard-sent))
+          ;; TODO: add invalid country as a custom error
           (t (c)
             (progn
               (format t "Got exception: ~a~%" c)
