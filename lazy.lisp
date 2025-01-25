@@ -318,7 +318,7 @@ Hope everything is alright.
 
 (defun handle-error ()
   (list 400 '(:content-type "text/plain; charset=utf-8")
-        '("[400] ilo ala sona")))
+        '("[400] ilo li sona ala")))
 
 (ql:quickload :http-body)
 
