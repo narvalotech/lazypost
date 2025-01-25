@@ -318,7 +318,7 @@ Hope everything is alright.
 
 (defun handle-error ()
   (list 400 '(:content-type "text/plain; charset=utf-8")
-        '("[400] oh noes!")))
+        '("[400] ilo ala sona")))
 
 (ql:quickload :http-body)
 
@@ -370,8 +370,7 @@ Hope everything is alright.
         '("Your postcard has been sent. It will be delivered in a few days.")))
 
 (defun postcard-not-sent ()
-  (list 400 '(:content-type "text/plain; charset=utf-8")
-        '("[400] ilo ala sona")))
+  (handle-error))
 
 (defun post-post (env)
   (let* ((params (http-body:parse (getf env :content-type)
