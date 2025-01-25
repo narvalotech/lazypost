@@ -377,20 +377,24 @@ Hope everything is alright.
                                   (getf env :content-length)
                                   (getf env :raw-body)))
          (parsed (mapcar #'parse-param params)))
-    (format t "input: ~A~%" params)
-    (format t "parsed: ~A~%" parsed)
+    (format t "processing: ~A~%" parsed)
     (if (not (form-params-ok? parsed))
         (postcard-not-sent)
-        (progn
-          (send-postcard
-           (add-dates
-            (make-postcard
-             (read-param "origin" parsed)
-             (read-param "destination" parsed)
-             (read-param "email-from" parsed)
-             (read-param "email-to" parsed)
-             (read-param "message" parsed))))
-          (postcard-sent)))))
+        (handler-case
+            (progn
+              (send-postcard
+               (add-dates
+                (make-postcard
+                 (read-param "origin" parsed)
+                 (read-param "destination" parsed)
+                 (read-param "email-from" parsed)
+                 (read-param "email-to" parsed)
+                 (read-param "message" parsed))))
+              (postcard-sent))
+          (t (c)
+            (progn
+              (format t "Got exception: ~a~%" c)
+              (postcard-not-sent)))))))
 
 (defun response (env)
   ;; (format t "query-string: ~A~%" (getf env :query-string))
