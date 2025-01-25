@@ -367,7 +367,7 @@ Hope everything is alright.
 (defun postcard-sent ()
   (list 200 '(:content-type "text/plain; charset=utf-8")
         ;; TODO: Add delivery delay?
-        '("Your postcard has been sent. It will be delivered in a few days.")))
+        '("Your postcard will be delivered in a few days.")))
 
 (defun postcard-not-sent ()
   (handle-error))
