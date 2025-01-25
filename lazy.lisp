@@ -26,9 +26,16 @@
       (format s "~A -> ~A~%" src-email dst-email)
       (format s "~A" text))))
 
+(defun postcard-valid? (postcard)
+  (and
+   (local-time:parse-timestring
+    (getf postcard :delivery-date) :fail-on-error nil)))
+
 (defun send-postcard (postcard)
   "Send a delayed postcard. Only accepts text."
-  (push postcard *the-post*))
+  ;; FIXME: validate postcard before adding it
+  (when (postcard-valid? postcard)
+    (push postcard *the-post*)))
 
 (defun deliver-postcard (postcard)
   (format t "##### You've got mail. #####~%~A~%~%" (pprint-postcard postcard)))
