@@ -337,7 +337,8 @@ Hope everything is alright.
 (defun parse-param (param)
   (let ((param-type
           (cond ((param-is-text? param) :text)
-                ((param-is-image? param) :image))))
+                ((param-is-image? param) :image)
+                (t :unknown))))
     (list param-type param)))
 
 (defun post-post (env)
