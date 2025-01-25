@@ -124,7 +124,7 @@ Hope everything is alright.
 (defparameter *country-db* (read-country-db))
 
 (defun find-country (db name)
-  (find-if (lambda (country) (search name (getf country :name))) db))
+  (find-if (lambda (country) (search name (getf country :name) :test #'equalp)) db))
 
 (find-country *country-db* "Lou")
  ; => (:CODE "LA" :NAME "Louisiana" :IS-STATE T :LAT 31.244823 :LON -92.14503)
