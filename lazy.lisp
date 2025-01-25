@@ -305,11 +305,11 @@ Hope everything is alright.
        (:form
         :action "#" :method :post :class "form-example" :enctype "multipart/form-data"
         (:raw
-         ;; (form-item "form-example" "destination" "Destination country")
-         ;; (form-item "form-example" "origin" "Origin country")
-         ;; (form-item "form-example" "email-from" "Your email" :is-email t)
-         ;; (form-item "form-example" "email-to" "Destination email" :is-email t)
-         (form-item "form-example" "message" "Message")
+         (form-item "form-example" "destination" "Destination country")
+         (form-item "form-example" "origin" "Origin country")
+         (form-item "form-example" "email-from" "Your email" :is-email t)
+         (form-item "form-example" "email-to" "Destination email" :is-email t)
+         (form-item "form-example" "message" "Message") ; TODO: use `textbox' for resizing
          (form-image "form-example" "picture" "Picture"))
         (:div
          :class "form-example"
@@ -341,6 +341,38 @@ Hope everything is alright.
                 (t :unknown))))
     (list param-type param)))
 
+(defun make-postcard (src-country dst-country
+                      src-email dst-email
+                      message &optional image)
+  (declare (ignore image))              ; TODO: add image support
+  (list
+     :src-country src-country
+     :dst-country dst-country
+     :src-email src-email
+     :dst-email dst-email
+     :text message))
+
+;; TODO: error on country not found
+(defun form-params-ok? (parsed)
+  ;; FIXME: validate parameters server-side
+  (declare (ignore parsed))
+  t)
+
+(defun read-param (name params)
+  (loop for param in params do
+    (let ((pname (car (cadr param)))
+          (pval (cdr (cadr param))))
+      (when (equalp name pname) (return pval)))))
+
+(defun postcard-sent ()
+  (list 200 '(:content-type "text/plain; charset=utf-8")
+        ;; TODO: Add delivery delay?
+        '("Your postcard has been sent. It will be delivered in a few days.")))
+
+(defun postcard-not-sent ()
+  (list 400 '(:content-type "text/plain; charset=utf-8")
+        '("[400] ilo ala sona")))
+
 (defun post-post (env)
   (let* ((params (http-body:parse (getf env :content-type)
                                   (getf env :content-length)
@@ -348,7 +380,18 @@ Hope everything is alright.
          (parsed (mapcar #'parse-param params)))
     (format t "input: ~A~%" params)
     (format t "parsed: ~A~%" parsed)
-    ))
+    (if (not (form-params-ok? parsed))
+        (postcard-not-sent)
+        (progn
+          (send-postcard
+           (add-dates
+            (make-postcard
+             (read-param "origin" parsed)
+             (read-param "destination" parsed)
+             (read-param "email-from" parsed)
+             (read-param "email-to" parsed)
+             (read-param "message" parsed))))
+          (postcard-sent)))))
 
 (defun response (env)
   ;; (format t "query-string: ~A~%" (getf env :query-string))
