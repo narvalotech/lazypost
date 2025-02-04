@@ -36,42 +36,6 @@
 (defun deliver-postcard (postcard)
   (format t "##### You've got mail. #####~%~A~%~%" (pprint-postcard postcard)))
 
-(progn
-  (setf *the-post* nil)
-  (send-postcard
-   '(:text
-     "Hello from Oslo!
-Made a new friend, Ole nordmann.
-
-xoxo Matt"
-
-     :src-country "Oslo, Norway"
-     :dst-country "Denver, USA"
-
-     :src-email "matt.smith@gmail.com"
-     :dst-email "john.smith@hostmail.com"
-
-     :sent-date "2024-12-24"
-     :delivery-date "2025-01-10"
-     ))
-  (send-postcard
-   '(:text
-     "Greetings from New York!
-Hope everything is alright.
-
-- John"
-
-     :src-country "New York, USA"
-     :dst-country "Denver, USA"
-
-     :src-email "john.smith@hostmail.com"
-     :dst-email "matt.smith@gmail.com"
-
-     :sent-date "2024-12-18"
-     :delivery-date "2024-12-25"
-     ))
-  )
-
 (defparameter *date-count* 0)
 
 (defun make-fake-date (time)
