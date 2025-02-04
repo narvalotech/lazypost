@@ -27,11 +27,18 @@
    (local-time:parse-timestring
     (getf postcard :delivery-date) :fail-on-error nil)))
 
+(defparameter *use-db* nil)
+
+(defun push-to-outbox (postcard)
+  (if *use-db*
+      nil                               ; TODO
+      (push postcard *the-post*)))
+
 (defun send-postcard (postcard)
   "Send a delayed postcard. Only accepts text."
   ;; FIXME: validate postcard before adding it
   (when (postcard-valid? postcard)
-    (push postcard *the-post*)))
+    (push-to-outbox postcard)))
 
 (defun deliver-postcard (postcard)
   (format t "##### You've got mail. #####~%~A~%~%" (pprint-postcard postcard)))
@@ -45,15 +52,26 @@
 (defun get-delivery-date (postcard)
   (local-time:parse-timestring (getf postcard :delivery-date)))
 
-(defun send-scheduled-postcards (db time)
+(defun pull-from-the-post (date)
+  (let ((to-send '()))
+    (setf *the-post*
+          (loop for postcard in *the-post*
+                append
+                (when postcard
+                  (if (local-time:timestamp>= date (get-delivery-date postcard))
+                      (progn (push postcard to-send) nil)
+                      (list postcard)))))
+    to-send))
+
+(defun pull-from-outbox (time)
+  (if *use-db*
+      nil                               ; TODO
+      (pull-from-the-post time)))
+
+(defun send-scheduled-postcards (time)
   (let ((fake-date (make-fake-date time)))
     (format t "Delivering today's letters (~A)...~%" fake-date)
-    (loop for postcard in db
-          append
-          (when postcard
-            (if (local-time:timestamp>= fake-date (get-delivery-date postcard))
-                (progn (deliver-postcard postcard) nil)
-                (list postcard))))))
+    (mapcar #'deliver-postcard (pull-from-outbox fake-date))))
 
 (ql:quickload :bordeaux-threads)
 
