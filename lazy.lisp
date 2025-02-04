@@ -13,12 +13,14 @@
                          src-email
                          dst-email
                        &allow-other-keys)
-      (read-postcard postcard)
+      postcard
     (with-output-to-string (s)
       "Send a delayed postcard. Only accepts text."
       (format s "~A -> ~A~%" src-country dst-country)
       (format s "~A -> ~A~%" src-email dst-email)
       (format s "~A" text))))
+
+(ql:quickload :local-time)
 
 (defun postcard-valid? (postcard)
   (and
@@ -71,8 +73,6 @@ Hope everything is alright.
   )
 
 (defparameter *date-count* 0)
-
-(ql:quickload :local-time)
 
 (defun make-fake-date (time)
   (incf *date-count*)
