@@ -1,5 +1,123 @@
-(defun get-form ()
-  "this is a form")
+(defparameter *use-db* t)
+
+(defun make-postcard (src-country dst-country
+                      src-email dst-email
+                      message
+                      &key image delivery-date sent-date)
+  (declare (ignore image))              ; TODO: add image support
+  (list
+     :src-country src-country
+     :dst-country dst-country
+     :src-email src-email
+     :dst-email dst-email
+     :delivery-date delivery-date
+     :sent-date sent-date
+     :text message))
+
+(ql:quickload :sqlite)
+
+(defun create-db-table (db)
+  (sqlite:execute-non-query
+   db
+   "create table outbox (id integer primary key,
+    delivery_date text not null,
+    sent_date text not null,
+    dst_country text not null,
+    src_country text not null,
+    dst_email text not null,
+    src_email text not null,
+    message text,
+    media blob)"))
+
+(defun insert-letter-in-db (db postcard)
+  (destructuring-bind (&key
+                         text
+                         src-country
+                         dst-country
+                         src-email
+                         dst-email
+                         delivery-date
+                         sent-date
+                       &allow-other-keys)
+      postcard
+    (sqlite:execute-non-query
+     db
+     "insert into outbox (delivery_date,
+                          sent_date,
+                          dst_country,
+                          src_country,
+                          dst_email,
+                          src_email,
+                          message,
+                          media) values (?, ?, ?, ?, ?, ?, ?, ?)"
+     delivery-date sent-date
+     dst-country src-country
+     dst-email src-email
+     text nil)))
+
+(defun make-letter-from-db-row (row)
+  (destructuring-bind (id
+                       delivery-date
+                       sent-date
+                       dst-country
+                       src-country
+                       dst-email
+                       src-email
+                       message
+                       media) row
+    (declare (ignore id))
+    (make-postcard
+     src-country
+     dst-country
+     src-email
+     dst-email
+     message
+     :image media
+     :delivery-date delivery-date
+     :sent-date sent-date)))
+
+(defun delete-db-row (db id)
+  (sqlite:execute-non-query
+   db
+   "DELETE FROM outbox WHERE id = ?" id))
+
+(defun pop-letters-from-db (db iso-date-str)
+  "Get all the letters that have a delivery date < the date string param."
+  (mapcar (lambda (letter)
+            (delete-db-row db (nth 0 letter))
+            (make-letter-from-db-row letter))
+          (sqlite:execute-to-list
+           db
+           "SELECT * FROM outbox WHERE delivery_date <= DATE(?)"
+           iso-date-str)))
+
+(defun dump-db (db)
+  (sqlite:execute-to-list db "SELECT * FROM outbox"))
+
+(defun init-db (path)
+  (sqlite:with-open-database (db path)
+    (ignore-errors (create-db-table db))))
+
+(defparameter *db-path* "/home/jon/repos/lazypost/db.sqlite")
+
+;; TODO: move to common init code
+(when *use-db*
+  (init-db *db-path*))
+
+;; Some tests
+;; (sqlite:with-open-database (db *db-path*)
+;;   (loop for i from 0 to 10 do
+;;     (insert-letter-in-db db (add-dates (generate-letter))))
+;;   (dump-db db))
+
+;; (sqlite:with-open-database (db *db-path*)
+;;   (pop-letters-from-db
+;;    db
+;;    (format-date
+;;     (local-time:timestamp+ (local-time:now) 15 :day))))
+
+;; (sqlite:with-open-database (db *db-path*)
+;;   (dump-db db))
 
 (declaim (optimize (debug 3) (space 0) (speed 0)))
 
@@ -27,11 +145,10 @@
    (local-time:parse-timestring
     (getf postcard :delivery-date) :fail-on-error nil)))
 
-(defparameter *use-db* nil)
-
 (defun push-to-outbox (postcard)
   (if *use-db*
-      nil                               ; TODO
+      (sqlite:with-open-database (db *db-path*)
+          (insert-letter-in-db db postcard))
       (push postcard *the-post*)))
 
 (defun send-postcard (postcard)
@@ -63,9 +180,19 @@
                       (list postcard)))))
     to-send))
 
+(defun format-date (time)
+  (local-time:format-timestring
+   nil
+   time
+   :format
+   '(:year "-"
+     (:month 2) "-"
+     (:day 2))))
+
 (defun pull-from-outbox (time)
   (if *use-db*
-      nil                               ; TODO
+      (sqlite:with-open-database (db *db-path*)
+        (pop-letters-from-db db (format-date time)))
       (pull-from-the-post time)))
 
 (defun send-scheduled-postcards (time)
@@ -223,15 +350,6 @@
 
 ; See ya, Sarah")
 
-(defun format-date (time)
-  (local-time:format-timestring
-   nil
-   time
-   :format
-   '(:year "-"
-     (:month 2) "-"
-     (:day 2))))
-
 (defun add-dates (postcard)
   (let ((datestr (format-date
                   (local-time:timestamp+
@@ -323,20 +441,6 @@
                 (t :unknown))))
     (list param-type param)))
 
-(defun make-postcard (src-country dst-country
-                      src-email dst-email
-                      message
-                      &key image delivery-date sent-date)
-  (declare (ignore image))              ; TODO: add image support
-  (list
-     :src-country src-country
-     :dst-country dst-country
-     :src-email src-email
-     :dst-email dst-email
-     :delivery-date delivery-date
-     :sent-date sent-date
-     :text message))
-
 ;; TODO: error on country not found
 (defun form-params-ok? (parsed)
   ;; FIXME: validate parameters server-side
@@ -418,107 +522,3 @@
 ;;             "test@rico.live"
 ;;             "Postcard from Mailey"
 ;;             "O hai")
-
-(ql:quickload :sqlite)
-
-(defun create-db-table (db)
-  (sqlite:execute-non-query
-   db
-   "create table outbox (id integer primary key,
-    delivery_date text not null,
-    sent_date text not null,
-    dst_country text not null,
-    src_country text not null,
-    dst_email text not null,
-    src_email text not null,
-    message text,
-    media blob)"))
-
-(defun insert-letter-in-db (db postcard)
-  (destructuring-bind (&key
-                         text
-                         src-country
-                         dst-country
-                         src-email
-                         dst-email
-                         delivery-date
-                         sent-date
-                       &allow-other-keys)
-      postcard
-    (sqlite:execute-non-query
-     db
-     "insert into outbox (delivery_date,
-                          sent_date,
-                          dst_country,
-                          src_country,
-                          dst_email,
-                          src_email,
-                          message,
-                          media) values (?, ?, ?, ?, ?, ?, ?, ?)"
-     delivery-date sent-date
-     dst-country src-country
-     dst-email src-email
-     text nil)))
-
-(defun make-letter-from-db-row (row)
-  (destructuring-bind (id
-                       delivery-date
-                       sent-date
-                       dst-country
-                       src-country
-                       dst-email
-                       src-email
-                       message
-                       media) row
-    (declare (ignore id))
-    (make-postcard
-     src-country
-     dst-country
-     src-email
-     dst-email
-     message
-     :image media
-     :delivery-date delivery-date
-     :sent-date sent-date)))
-
-(defun delete-db-row (db id)
-  (sqlite:execute-non-query
-   db
-   "DELETE FROM outbox WHERE id = ?" id))
-
-(defun pop-letters-from-db (db iso-date-str)
-  "Get all the letters that have a delivery date < the date string param."
-  (mapcar (lambda (letter)
-            (delete-db-row db (nth 0 letter))
-            (make-letter-from-db-row letter))
-          (sqlite:execute-to-list
-           db
-           "SELECT * FROM outbox WHERE delivery_date <= DATE(?)"
-           iso-date-str)))
-
-(defun dump-db (db)
-  (sqlite:execute-to-list db "SELECT * FROM outbox"))
-
-(defun init-db (path)
-  (sqlite:with-open-database (db path)
-    (ignore-errors (create-db-table db))))
-
-(defparameter *db-path* "/home/jon/repos/lazypost/db.sqlite")
-
-;; TODO: move to common init code
-(init-db *db-path*)
-
-;; Some tests
-(sqlite:with-open-database (db *db-path*)
-  (loop for i from 0 to 10 do
-    (insert-letter-in-db db (add-dates (generate-letter))))
-  (dump-db db))
-
-(sqlite:with-open-database (db *db-path*)
-  (pop-letters-from-db
-   db
-   (format-date
-    (local-time:timestamp+ (local-time:now) 15 :day))))
-
-(sqlite:with-open-database (db *db-path*)
-  (dump-db db))
