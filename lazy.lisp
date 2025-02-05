@@ -157,9 +157,6 @@
   (when (postcard-valid? postcard)
     (push-to-outbox postcard)))
 
-(defun deliver-postcard (postcard)
-  (format t "##### You've got mail. #####~%~A~%~%" (pprint-postcard postcard)))
-
 (defparameter *date-count* 0)
 
 (defun make-fake-date (time)
@@ -180,6 +177,37 @@
                       (list postcard)))))
     to-send))
 
+(ql:quickload :cl-smtp)
+
+(defparameter *use-smtp* nil)
+
+(defun send-email-smtp (from name to subject message &optional attachments)
+  (cl-smtp:send-email *smtp-server* *smtp-user* to subject message
+                      :attachments attachments
+                      :cc from
+                      :reply-to from
+                      :display-name name
+                      :authentication (list :login *smtp-user* *smtp-pass*)
+                      :ssl :tls
+                      ))
+
+(defun deliver-postcard-real (postcard)
+ (destructuring-bind (&key
+                         text
+                         src-email
+                         dst-email
+                       &allow-other-keys)
+      postcard
+   (when *use-smtp*
+     (send-email-smtp
+      src-email "The Lazypost Company"
+      dst-email "Digital postcard"
+      text))))
+
+(defun deliver-postcard-fake (postcard)
+  (format t "##### You've got mail. #####~%~A~%~%"
+          (pprint-postcard postcard)))
+
 (defun format-date (time)
   (local-time:format-timestring
    nil
@@ -194,6 +222,11 @@
       (sqlite:with-open-database (db *db-path*)
         (pop-letters-from-db db (format-date time)))
       (pull-from-the-post time)))
+
+(defun deliver-postcard (postcard)
+  (if *use-smtp*
+      (deliver-postcard-real postcard)
+      (deliver-postcard-fake postcard)))
 
 (defun send-scheduled-postcards (time)
   (let ((fake-date (make-fake-date time)))
@@ -335,7 +368,7 @@
      :src-country src-country
      :dst-country dst-country
      :src-email (format nil "~A@lazypost.net" src-name)
-     :dst-email (format nil "~A@lazypost.net" dst-name)
+     :dst-email (format nil "test-~A@rico.live" dst-name)
      :text
      (format nil "~A from ~A!~%~%~A, ~A"
              (nth 0 greeting)
@@ -505,20 +538,3 @@
 
 (defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port 8000))
 
-(ql:quickload :cl-smtp)
-
-(defun send-email (from name to subject message &optional attachments)
-  (cl-smtp:send-email *smtp-server* *smtp-user* to subject message
-                      :attachments attachments
-                      :cc from
-                      :reply-to from
-                      :display-name name
-                      :authentication (list :login *smtp-user* *smtp-pass*)
-                      :ssl :tls
-                      ))
-
-;; (send-email "random@rico.live"
-;;             "Mailey McEmailface"
-;;             "test@rico.live"
-;;             "Postcard from Mailey"
-;;             "O hai")
