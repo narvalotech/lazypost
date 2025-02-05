@@ -154,6 +154,9 @@
   "Send a delayed postcard. Only accepts text."
   ;; FIXME: validate postcard before adding it
   (when (postcard-valid? postcard)
+    (format t "Queue: ~A -> ~A~%"
+            (getf postcard :src-email)
+            (getf postcard :dst-email))
     (push-to-outbox postcard)))
 
 (defparameter *date-count* 0)
@@ -474,6 +477,7 @@
 ;; TODO: error on country not found
 (defun form-params-ok? (parsed)
   ;; FIXME: validate parameters server-side
+  ;; (format t "~A~%" parsed)
   (declare (ignore parsed))
   t)
 
@@ -496,7 +500,7 @@
                                   (getf env :content-length)
                                   (getf env :raw-body)))
          (parsed (mapcar #'parse-param params)))
-    (format t "processing: ~A~%" parsed)
+    ;; (format t "processing: ~A~%" parsed)
     (if (not (form-params-ok? parsed))
         (postcard-not-sent)
         (handler-case
