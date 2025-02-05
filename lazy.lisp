@@ -133,7 +133,6 @@
                        &allow-other-keys)
       postcard
     (with-output-to-string (s)
-      "Send a delayed postcard. Only accepts text."
       (format s "~A -> ~A~%" src-country dst-country)
       (format s "~A -> ~A~%" src-email dst-email)
       (format s "~A" text))))
@@ -243,8 +242,7 @@
 ;;    (lambda ()
 ;;      (loop while t do
 ;;        (let ((current-time (local-time:now)))
-;;          (setf *the-post*
-;;                (send-scheduled-postcards *the-post* current-time))
+;;          (send-scheduled-postcards current-time)
 ;;          (sleep *send-interval-s*))))
 ;;    :name "Postman thread"))
 
@@ -364,7 +362,6 @@
         (dst-name (nth (random (length *names*)) *names*))
         (greeting (nth (random (length *greetings*)) *greetings*)))
     (list
-     ;; TODO: use country instead of city
      :src-country src-country
      :dst-country dst-country
      :src-email (format nil "~A@lazypost.net" src-name)
@@ -403,7 +400,7 @@
 
 ; Love, Susan")
 
-;; (loop for i from 0 to 40 collect
+;; (loop for i from 0 to 10 collect
 ;;       (send-postcard (add-dates (generate-letter))))
 
 ;; TODO: use something with less deps than spinneret
