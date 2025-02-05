@@ -449,9 +449,11 @@
          (:input :type :submit :value "Send"))))
       ))))
 
-(defun handle-error ()
+(defun handle-error (&optional context)
   (list 400 '(:content-type "text/plain; charset=utf-8")
-        '("[400] ilo li sona ala")))
+        (if context
+            (list context)
+            '("[400] ilo li sona ala"))))
 
 (ql:quickload :http-body)
 
@@ -492,8 +494,17 @@
         ;; TODO: Add delivery delay?
         '("Your postcard will be delivered in a few days.")))
 
-(defun postcard-not-sent ()
-  (handle-error))
+(defun postcard-not-sent (&optional context)
+  (handle-error context))
+
+(defun error-if-not-valid (postcard)
+  (unless
+      (find-country *country-db* (getf postcard :src-country))
+    (error "Country not found in database: ~A" (getf postcard :src-country)))
+
+  (unless
+      (find-country *country-db* (getf postcard :dst-country))
+    (error "Country not found in database: ~A" (getf postcard :dst-country))))
 
 (defun post-post (env)
   (let* ((params (http-body:parse (getf env :content-type)
@@ -505,20 +516,20 @@
         (postcard-not-sent)
         (handler-case
             (progn
-              (send-postcard
-               (add-dates
-                (make-postcard
-                 (read-param "origin" parsed)
-                 (read-param "destination" parsed)
-                 (read-param "email-from" parsed)
-                 (read-param "email-to" parsed)
-                 (read-param "message" parsed))))
-              (postcard-sent))
+              (let ((postcard (make-postcard
+                               (read-param "origin" parsed)
+                               (read-param "destination" parsed)
+                               (read-param "email-from" parsed)
+                               (read-param "email-to" parsed)
+                               (read-param "message" parsed))))
+                (error-if-not-valid postcard)
+                (send-postcard (add-dates postcard))
+                (postcard-sent)))
           ;; TODO: add invalid country as a custom error
           (t (c)
             (progn
               (format t "Got exception: ~a~%" c)
-              (postcard-not-sent)))))))
+              (postcard-not-sent (format nil "~a" c))))))))
 
 (defun response (env)
   ;; (format t "query-string: ~A~%" (getf env :query-string))
