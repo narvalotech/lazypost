@@ -1,3 +1,4 @@
+(defvar *root-path* "/home/jon/repos/lazypost")
 (defparameter *use-db* t)
 
 (defun make-postcard (src-country dst-country
@@ -98,7 +99,7 @@
   (sqlite:with-open-database (db path)
     (ignore-errors (create-db-table db))))
 
-(defparameter *db-path* "/home/jon/repos/lazypost/db.sqlite")
+(defparameter *db-path* (concatenate 'string *root-path* "/db.sqlite"))
 
 ;; TODO: move to common init code
 (when *use-db*
