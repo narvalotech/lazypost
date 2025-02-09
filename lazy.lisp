@@ -411,48 +411,13 @@
 ;; (loop for i from 0 to 10 collect
 ;;       (send-postcard (add-dates (generate-letter))))
 
-;; TODO: use something with less deps than spinneret
-(ql:quickload :spinneret)
-
-(defmacro form-image (class name text)
-  (spinneret:with-html-string
-    (:div :class class
-     (:label :for name text)
-     (:input :type :file
-             :name name :id name
-             :accept "image/jpeg"))))
-
-(defmacro form-item (class name text &key is-email)
-  (spinneret:with-html-string
-    (:div :class class
-     (:label :for name text)
-     (:input :type (if is-email :email :text)
-             :name name :id name :required t))))
-
 (defun handle-send (env)
   (declare (ignore env))
   (list
    200
    '(:content-type "text/html")
-   (list
-    (spinneret:with-html-string
-      (:doctype)
-      (:head
-       (:title "The Lazy Post Company"))
-      (:body
-       (:form
-        :action "#" :method :post :class "form-example" :enctype "multipart/form-data"
-        (:raw
-         (form-item "form-example" "destination" "Destination country")
-         (form-item "form-example" "origin" "Origin country")
-         (form-item "form-example" "email-from" "Your email" :is-email t)
-         (form-item "form-example" "email-to" "Destination email" :is-email t)
-         (form-item "form-example" "message" "Message") ; TODO: use `textbox' for resizing
-         (form-image "form-example" "picture" "Picture"))
-        (:div
-         :class "form-example"
-         (:input :type :submit :value "Send"))))
-      ))))
+   (project-file "front/index.html")
+   ))
 
 (defun handle-error (&optional context)
   (list 400 '(:content-type "text/plain; charset=utf-8")
@@ -533,10 +498,10 @@
         (handler-case
             (progn
               (let ((postcard (make-postcard
-                               (read-param "origin" parsed)
-                               (read-param "destination" parsed)
-                               (read-param "email-from" parsed)
-                               (read-param "email-to" parsed)
+                               (read-param "country-sender" parsed)
+                               (read-param "country-recipient" parsed)
+                               (read-param "email-sender" parsed)
+                               (read-param "email-recipient" parsed)
                                (read-param "message" parsed))))
                 (error-if-not-valid postcard)
                 (send-postcard (add-dates postcard))
