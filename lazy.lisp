@@ -1,6 +1,10 @@
 (defvar *root-path* "/home/jon/repos/lazypost")
 (defparameter *use-db* t)
 
+(defun project-file (path-to-file)
+  (parse-namestring
+   (concatenate 'string *root-path* "/" path-to-file)))
+
 (defun make-postcard (src-country dst-country
                       src-email dst-email
                       message
@@ -99,7 +103,7 @@
   (sqlite:with-open-database (db path)
     (ignore-errors (create-db-table db))))
 
-(defparameter *db-path* (concatenate 'string *root-path* "/db.sqlite"))
+(defparameter *db-path* (project-file "db.sqlite"))
 
 ;; TODO: move to common init code
 (when *use-db*
@@ -456,6 +460,17 @@
             (list context)
             '("[400] ilo li sona ala"))))
 
+(defun handle-static (env)
+  ;; TODO: check that request targets localhost
+  (let* ((filename (getf env :path-info))
+         (ttt (search ".." filename)))
+    (if ttt
+        (handle-error)                  ; 100% secure, nothing to see here
+        (list
+         200
+         nil
+         (project-file filename)))))
+
 (ql:quickload :http-body)
 
 (defun param-is-binary? (param)
@@ -542,6 +557,7 @@
 
     ((eql :get (getf env :request-method))
      (cond
+       ((search "/front/" (getf env :path-info) :test #'equalp) (handle-static env))
        ((equalp "/send" (getf env :path-info)) (handle-send env))
        (t (handle-error))))
 
