@@ -198,22 +198,50 @@
                       :ssl :tls
                       ))
 
-(defun deliver-postcard-real (postcard)
+(ql:quickload :sendgrid)
+
+(defparameter *use-sendgrid* nil)
+
+;; TODO: use BT:WITH-TIMEOUT on this. I've seen it get stuck sometimes.
+(defun send-email-sendgrid (from name to subject message &optional attachments)
+  (declare (ignore attachments))
+  (sendgrid:send-email :to to
+                       :from "service@lazypost.net"
+                       :reply-to (list (cons "email" from)
+                                       (cons "name" from))
+                       :from-name name
+                       :subject subject
+                       :content message))
+
+(defun send-postcard-fake (postcard)
+  (format t "##### You've got mail. #####~%~A~%~%"
+          (pprint-postcard postcard)))
+
+(defun make-subject (postcard)
+  (format nil "Digital postcard from ~A"
+          (getf postcard :src-country)))
+
+(defun deliver-postcard (postcard)
  (destructuring-bind (&key
                          text
                          src-email
                          dst-email
                        &allow-other-keys)
       postcard
-   (when *use-smtp*
-     (send-email-smtp
-      src-email "The Lazypost Company"
-      dst-email "Digital postcard"
-      text))))
+   (format t "Sending: ~A -> ~A~%" src-email dst-email)
+   (cond
+     (*use-sendgrid* (send-email-sendgrid
+                      src-email "The Lazypost Company"
+                      dst-email (make-subject postcard)
+                      text))
 
-(defun deliver-postcard-fake (postcard)
-  (format t "##### You've got mail. #####~%~A~%~%"
-          (pprint-postcard postcard)))
+     (*use-smtp* (send-email-smtp
+                  src-email "The Lazypost Company"
+                  dst-email (make-subject postcard)
+                  text))
+
+     (t (send-postcard-fake postcard))
+     )))
 
 (defun format-date (time)
   (local-time:format-timestring
@@ -230,11 +258,9 @@
         (pop-letters-from-db db (format-date time)))
       (pull-from-the-post time)))
 
-(defun deliver-postcard (postcard)
-  (if *use-smtp*
-      (deliver-postcard-real postcard)
-      (deliver-postcard-fake postcard)))
-
+;; TODO: if this fails, then we should push the letters back into the "outbox".
+;; Hopefully we can then fix a bug or restart the app and we don't lose any
+;; data.
 (defun send-scheduled-postcards (time)
   (let ((fake-date (make-fake-date time)))
     (format t "Delivering today's letters (~A)...~%" fake-date)
