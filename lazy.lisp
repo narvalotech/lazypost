@@ -258,7 +258,7 @@
 
 (defun read-country-db ()
   (let ((csv
-          (with-open-file (stream "~/repos/lazypost/coutries-and-states.csv")
+          (with-open-file (stream (project-file "coutries-and-states.csv"))
             (read-csv:parse-csv stream #\,))))
     (loop for country in (cdr csv)
           collect
