@@ -247,7 +247,7 @@
                        :content message))
 
 (defun send-postcard-fake (postcard)
-  (log-dbg (format nil  "##### You've got mail. #####~%~A~%"
+  (log-inf (format nil  "##### You've got mail. #####~%~A~%"
                    (pprint-postcard postcard))))
 
 (defun make-subject (postcard)
