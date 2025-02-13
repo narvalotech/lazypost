@@ -198,6 +198,19 @@
                       :ssl :tls
                       ))
 
+(ql:quickload :sendgrid)
+
+
+;; (sendgrid:send-email :to "test-email@rico.live"
+;;                      :from "service@lazypost.net"
+;;                      :reply-to (list (cons "email" "randomdude@rico.live")
+;;                                      (cons "name" "randomdude@rico.live"))
+;;                      :from-name "The Lazypost Company"
+;;                      :subject "Digital postcard"
+;;                      :content "Hello from Oslo!"
+;;                      :attachments t
+;;                      :file (project-file "testfile.png")
+;;                      :filename "picture.png")
 (defun deliver-postcard-real (postcard)
  (destructuring-bind (&key
                          text
