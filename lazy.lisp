@@ -1,6 +1,41 @@
 (defvar *root-path* "/home/jon/repos/lazypost")
 (defparameter *use-db* t)
 
+(ql:quickload :local-time)
+
+(defparameter *log-levels*
+  '(:dbg (4 "DEBG")
+    :inf (3 "INFO")
+    :wrn (2 "WARN")
+    :err (1 "ERRR")
+    ))
+
+(defparameter *current-log-level* :inf)
+
+(defun yeet-log-message (severity)
+  (let ((current-severity (nth 0 (getf *log-levels* *current-log-level*)))
+        (msg-severity (nth 0 (getf *log-levels* severity))))
+    (> msg-severity current-severity)))
+
+(yeet-log-message :dbg)
+ ; => T
+(yeet-log-message :inf)
+ ; => NIL
+(yeet-log-message :wrn)
+ ; => NIL
+
+(defun poor-mans-log (severity message)
+  (unless (yeet-log-message severity)
+    (format t  "[~A] ~A: ~A~%"
+            (local-time:now)
+            (nth 1 (getf *log-levels* severity))
+            message)))
+
+(defun log-dbg (message) (poor-mans-log :dbg message))
+(defun log-inf (message) (poor-mans-log :inf message))
+(defun log-wrn (message) (poor-mans-log :wrn message))
+(defun log-err (message) (poor-mans-log :err message))
+
 (defun project-file (path-to-file)
   (parse-namestring
    (concatenate 'string *root-path* "/" path-to-file)))
@@ -142,8 +177,6 @@
       (format s "~A -> ~A~%" src-email dst-email)
       (format s "~A" text))))
 
-(ql:quickload :local-time)
-
 (defun postcard-valid? (postcard)
   (and
    (local-time:parse-timestring
@@ -159,9 +192,9 @@
   "Send a delayed postcard. Only accepts text."
   ;; FIXME: validate postcard before adding it
   (when (postcard-valid? postcard)
-    (format t "Queue: ~A -> ~A~%"
-            (getf postcard :src-email)
-            (getf postcard :dst-email))
+    (log-dbg (format nil  "Queue: ~A -> ~A"
+                     (getf postcard :src-email)
+                     (getf postcard :dst-email)))
     (push-to-outbox postcard)))
 
 (defparameter *date-count* 0)
@@ -214,8 +247,8 @@
                        :content message))
 
 (defun send-postcard-fake (postcard)
-  (format t "##### You've got mail. #####~%~A~%~%"
-          (pprint-postcard postcard)))
+  (log-dbg (format nil  "##### You've got mail. #####~%~A~%"
+                   (pprint-postcard postcard))))
 
 (defun make-subject (postcard)
   (format nil "Digital postcard from ~A"
@@ -228,7 +261,7 @@
                          dst-email
                        &allow-other-keys)
       postcard
-   (format t "Sending: ~A -> ~A~%" src-email dst-email)
+   (log-dbg (format nil  "Sending: ~A -> ~A" src-email dst-email))
    (cond
      (*use-sendgrid* (send-email-sendgrid
                       src-email "The Lazypost Company"
@@ -263,7 +296,7 @@
 ;; data.
 (defun send-scheduled-postcards (time)
   (let ((fake-date (make-fake-date time)))
-    (format t "Delivering today's letters (~A)...~%" fake-date)
+    (log-dbg (format nil  "Delivering today's letters (~A)..." fake-date))
     (mapcar #'deliver-postcard (pull-from-outbox fake-date))))
 
 (ql:quickload :bordeaux-threads)
@@ -486,7 +519,7 @@
 ;; TODO: error on country not found
 (defun form-params-ok? (parsed)
   ;; FIXME: validate parameters server-side
-  ;; (format t "~A~%" parsed)
+  ;; (log-dbg (format nil  "~A" parsed))
   (declare (ignore parsed))
   t)
 
@@ -518,7 +551,7 @@
                                   (getf env :content-length)
                                   (getf env :raw-body)))
          (parsed (mapcar #'parse-param params)))
-    ;; (format t "processing: ~A~%" parsed)
+    ;; (log-dbg (format nil  "processing: ~A%" parsed))
     (if (not (form-params-ok? parsed))
         (postcard-not-sent)
         (handler-case
@@ -535,11 +568,11 @@
           ;; TODO: add invalid country as a custom error
           (t (c)
             (progn
-              (format t "Got exception: ~a~%" c)
+              (log-err (format nil "Got exception when processing ~a: ~a" parsed c))
               (postcard-not-sent (format nil "~a" c))))))))
 
 (defun response (env)
-  ;; (format t "query-string: ~A~%" (getf env :query-string))
+  ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
   ;; (break)
 
   (cond
