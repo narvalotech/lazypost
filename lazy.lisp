@@ -231,44 +231,6 @@
                       :ssl :tls
                       ))
 
-;; (send-email-smtp "test@rico.live" "The Lazypost Company"
-;;                  "test-dst@rico.live"
-;;                  "Digital postcard"
-;;                  "Hello world (with images!)"
-;;                  ;; attachment can be a pathname
-;;                  (parse-namestring "/tmp/tmp_0.png"))
-
-(defun make-temporary-file (extension)
-  "Create a simple temporary file path"
-  (let ((dir (truename "/tmp/"))  ; Unix-like systems
-        (counter 0)
-        (extension (if extension extension "tmp")))
-    (loop
-     (let ((path (format nil "~Atmp_~D.~A" dir counter extension)))
-       (when (not (probe-file path))
-         (return path)))
-     (incf counter))))
-
-(defun write-to-temporary-file (input-stream &optional extension)
-  "Make a temp file and write the flexi-stream to it."
-  (let ((temp-path (make-temporary-file extension)))
-    (with-open-file (stream temp-path
-                            :direction :output
-                            :if-exists :supersede
-                            :if-does-not-exist :create
-                            :element-type 'unsigned-byte)
-      (let ((flexi-stream (flexi-streams:make-flexi-stream stream)))
-        ;; Not sure I'm allowed to reach like that
-        (write-sequence (slot-value input-stream 'vector) flexi-stream)))
-    temp-path))
-
-(defun get-extension (filename)
-  (subseq filename (1+ (search "." filename :from-end t))))
-
-;; (get-extension *name*)
-
-;; (write-to-temporary-file * "png")
-
 (ql:quickload :sendgrid)
 
 (defparameter *use-sendgrid* nil)
