@@ -537,14 +537,45 @@
 (defun postcard-not-sent (&optional context)
   (handle-error context))
 
-(defun error-if-not-valid (postcard)
-  (unless
-      (find-country *country-db* (getf postcard :src-country))
-    (error "Country not found in database: ~A" (getf postcard :src-country)))
+(defun valid-email (email)
+  "Minimum validation"
+  (let ((at-position (search "@" email)))
+    (and
+     at-position
+     (> at-position 0)
+     (< at-position (- (length email) 1)))))
 
-  (unless
-      (find-country *country-db* (getf postcard :dst-country))
-    (error "Country not found in database: ~A" (getf postcard :dst-country))))
+(valid-email "test@example.com")
+ ; => T
+(valid-email "t@a")
+ ; => T
+(valid-email "@example.com")
+ ; => NIL
+(valid-email "test@")
+ ; => NIL
+(valid-email "test")
+ ; => NIL
+
+(defun error-if-not-valid (postcard)
+  (destructuring-bind (&key
+                         src-country
+                         dst-country
+                         src-email
+                         dst-email
+                       &allow-other-keys)
+      postcard
+
+    (unless
+        (find-country *country-db* src-country)
+      (error "Country not found in database: ~A" src-country))
+
+    (unless
+        (find-country *country-db* dst-country)
+      (error "Country not found in database: ~A" dst-country))
+
+    (unless (valid-email src-email) (error "Invalid email: ~A" src-email))
+    (unless (valid-email dst-email) (error "Invalid email: ~A" dst-email))
+    ))
 
 (defun post-post (env)
   (let* ((params (http-body:parse (getf env :content-type)
