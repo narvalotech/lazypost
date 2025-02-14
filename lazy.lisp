@@ -255,26 +255,26 @@
           (getf postcard :src-country)))
 
 (defun deliver-postcard (postcard)
- (destructuring-bind (&key
+  (destructuring-bind (&key
                          text
                          src-email
                          dst-email
                        &allow-other-keys)
       postcard
-   (log-dbg (format nil  "Sending: ~A -> ~A" src-email dst-email))
-   (cond
-     (*use-sendgrid* (send-email-sendgrid
-                      src-email "The Lazypost Company"
-                      dst-email (make-subject postcard)
-                      text))
+    (log-dbg (format nil  "Sending: ~A -> ~A" src-email dst-email))
+    (cond
+      (*use-sendgrid* (send-email-sendgrid
+                       src-email "The Lazypost Company"
+                       dst-email (make-subject postcard)
+                       text))
 
-     (*use-smtp* (send-email-smtp
-                  src-email "The Lazypost Company"
-                  dst-email (make-subject postcard)
-                  text))
+      (*use-smtp* (send-email-smtp
+                   src-email "The Lazypost Company"
+                   dst-email (make-subject postcard)
+                   text))
 
-     (t (send-postcard-fake postcard))
-     )))
+      (t (send-postcard-fake postcard))
+      )))
 
 (defun format-date (time)
   (local-time:format-timestring
