@@ -618,13 +618,24 @@
 (defun postcard-not-sent (&optional context)
   (handle-error context))
 
-(defun valid-email (email)
-  "Minimum validation"
+(defun looks-like-mail-address? (email)
   (let ((at-position (search "@" email)))
     (and
      at-position
      (> at-position 0)
      (< at-position (- (length email) 1)))))
+
+(defvar *allowed-addresses* nil)
+
+(defun address-allowed? (email)
+  (if *allowed-addresses*
+      (not (null (find-if (lambda (seq) (search seq email)) *allowed-addresses*)))
+      t))
+
+(defun valid-email (email)
+  "Minimum validation"
+  (and (looks-like-mail-address? email)
+       (address-allowed? email)))
 
 (valid-email "test@example.com")
  ; => T
