@@ -44,7 +44,6 @@
                       src-email dst-email
                       message
                       &key image delivery-date sent-date)
-  (declare (ignore image))              ; TODO: add image support
   (list
      :src-country src-country
      :dst-country dst-country
@@ -52,7 +51,8 @@
      :dst-email dst-email
      :delivery-date delivery-date
      :sent-date sent-date
-     :text message))
+     :text message
+     :image image))
 
 (ql:quickload :sqlite)
 
@@ -67,7 +67,18 @@
     dst_email text not null,
     src_email text not null,
     message text,
+    media_name text,
     media blob)"))
+
+(defun get-image-name (image)
+  (if image (nth 1 image) nil))
+
+(defun get-image-data (image)
+  (if image (nth 0 image) nil))
+
+(defun make-image (name data)
+  (when (and name data)
+    (list data name)))
 
 (defun insert-letter-in-db (db postcard)
   (destructuring-bind (&key
@@ -78,6 +89,7 @@
                          dst-email
                          delivery-date
                          sent-date
+                         image
                        &allow-other-keys)
       postcard
     (sqlite:execute-non-query
@@ -89,11 +101,13 @@
                           dst_email,
                           src_email,
                           message,
-                          media) values (?, ?, ?, ?, ?, ?, ?, ?)"
+                          media_name,
+                          media) values (?, ?, ?, ?, ?, ?, ?, ?, ?)"
      delivery-date sent-date
      dst-country src-country
      dst-email src-email
-     text nil)))
+     text
+     (get-image-name image) (get-image-data image))))
 
 (defun make-letter-from-db-row (row)
   (destructuring-bind (id
@@ -104,6 +118,7 @@
                        dst-email
                        src-email
                        message
+                       media-name
                        media) row
     (declare (ignore id))
     (make-postcard
@@ -112,7 +127,7 @@
      src-email
      dst-email
      message
-     :image media
+     :image (make-image media-name media)
      :delivery-date delivery-date
      :sent-date sent-date)))
 
@@ -221,9 +236,9 @@
 
 (defparameter *use-smtp* nil)
 
-(defun send-email-smtp (from name to subject message &optional attachments)
+(defun send-email-smtp (from name to subject message &optional attached-file)
   (cl-smtp:send-email *smtp-server* *smtp-user* to subject message
-                      :attachments attachments
+                      :attachments attached-file
                       :cc from
                       :reply-to from
                       :display-name name
@@ -236,15 +251,28 @@
 (defparameter *use-sendgrid* nil)
 
 ;; TODO: use BT:WITH-TIMEOUT on this. I've seen it get stuck sometimes.
-(defun send-email-sendgrid (from name to subject message &optional attachments)
-  (declare (ignore attachments))
-  (sendgrid:send-email :to to
-                       :from "service@lazypost.net"
-                       :reply-to (list (cons "email" from)
-                                       (cons "name" from))
-                       :from-name name
-                       :subject subject
-                       :content message))
+(defun send-email-sendgrid (from name to subject message &optional attached-file)
+  (if attached-file
+      (sendgrid:send-email :to to
+                           :from "service@lazypost.net"
+                           :reply-to (list (cons "email" from)
+                                           (cons "name" from))
+                           :from-name name
+                           :subject subject
+                           :content message
+                           :send-at 0
+                           :attachments t
+                           :file (namestring attached-file)
+                           :filename "picture.jpg")
+
+      (sendgrid:send-email :to to
+                           :from "service@lazypost.net"
+                           :reply-to (list (cons "email" from)
+                                           (cons "name" from))
+                           :from-name name
+                           :subject subject
+                           :content message
+                           :send-at 0)))
 
 (defun send-postcard-fake (postcard)
   (log-inf (format nil  "##### You've got mail. #####~%~A~%"
@@ -254,27 +282,49 @@
   (format nil "Digital postcard from ~A"
           (getf postcard :src-country)))
 
+(defparameter *temp-image-file* (project-file "picture.jpg"))
+
+(defun write-to-temporary-file (input-vector)
+  "Make a temp file and write the input (vector) to it."
+  ;; We can re-use the same file:
+  ;; - we don't want disk space to balloon up
+  ;; - we will be sending from a single thread
+  (with-open-file (stream *temp-image-file*
+                          :direction :output
+                          :if-exists :supersede
+                          :if-does-not-exist :create
+                          :element-type 'unsigned-byte)
+    (write-sequence input-vector stream))
+  *temp-image-file*)
+
 (defun deliver-postcard (postcard)
   (destructuring-bind (&key
                          text
                          src-email
                          dst-email
+                         image
                        &allow-other-keys)
       postcard
-    (log-dbg (format nil  "Sending: ~A -> ~A" src-email dst-email))
-    (cond
-      (*use-sendgrid* (send-email-sendgrid
-                       src-email "The Lazypost Company"
-                       dst-email (make-subject postcard)
-                       text))
+    (log-inf (format nil  "Sending: ~A -> ~A" src-email dst-email))
 
-      (*use-smtp* (send-email-smtp
-                   src-email "The Lazypost Company"
-                   dst-email (make-subject postcard)
-                   text))
+    (let ((attached-file
+            (when image
+              (write-to-temporary-file (nth 0 image)))))
+      (cond
+        (*use-sendgrid* (send-email-sendgrid
+                         src-email "The Lazypost Company"
+                         dst-email (make-subject postcard)
+                         text
+                         attached-file))
 
-      (t (send-postcard-fake postcard))
-      )))
+        (*use-smtp* (send-email-smtp
+                     src-email "The Lazypost Company"
+                     dst-email (make-subject postcard)
+                     text
+                     attached-file))
+
+        (t (send-postcard-fake postcard))
+        ))))
 
 (defun format-date (time)
   (local-time:format-timestring
@@ -509,11 +559,42 @@
   (and (param-is-binary? param)
        (equalp (nth 3 param) "image/jpeg")))
 
+(defun stream->vector (stream &key
+                                (element-type '(unsigned-byte 8))
+                                (initial-size 1024))
+  "Read the entire stream into a vector of the specified element-type.
+   Returns the filled vector."
+  ;; I didn't write this. Phind did.
+  (let ((buffer (make-array initial-size
+                            :element-type element-type
+                            :adjustable t
+                            :fill-pointer 0)))
+    (loop for byte = (read-byte stream nil nil)
+          while byte
+          do (vector-push-extend byte buffer))
+    buffer))
+
+(defun vector->sarray (input)
+  (let ((simple-array (make-array (length input)
+                                  :element-type '(unsigned-byte 8))))
+    (replace simple-array input)
+    simple-array))
+
 (defun parse-param (param)
   (let ((param-type
           (cond ((param-is-text? param) :text)
                 ((param-is-image? param) :image)
                 (t :unknown))))
+
+    ;; The param as passed from CLACK is a FLEXI-STREAM of type input vector. We
+    ;; want to extract the vector as soon as possible to not have to deal with
+    ;; it later in the call tree.
+    (when (eql param-type :image)
+      (let ((data (vector->sarray (stream->vector (nth 1 param))))
+            (filename (nth 2 param))
+            (param-name (nth 0 param)))
+        (setf param (list param-name data filename))))
+
     (list param-type param)))
 
 ;; TODO: error on country not found
@@ -556,12 +637,16 @@
 (valid-email "test")
  ; => NIL
 
+(defun image-too-big (image)
+  (< (length (car image)) 2000000))
+
 (defun error-if-not-valid (postcard)
   (destructuring-bind (&key
                          src-country
                          dst-country
                          src-email
                          dst-email
+                         image
                        &allow-other-keys)
       postcard
 
@@ -575,6 +660,7 @@
 
     (unless (valid-email src-email) (error "Invalid email: ~A" src-email))
     (unless (valid-email dst-email) (error "Invalid email: ~A" dst-email))
+    (unless (image-too-big image) (error "Image too large (>2MB)"))
     ))
 
 (defun post-post (env)
@@ -592,14 +678,15 @@
                                (read-param "country-recipient" parsed)
                                (read-param "email-sender" parsed)
                                (read-param "email-recipient" parsed)
-                               (read-param "message" parsed))))
+                               (read-param "message" parsed)
+                               :image (read-param "picture" parsed))))
                 (error-if-not-valid postcard)
                 (send-postcard (add-dates postcard))
                 (postcard-sent)))
           ;; TODO: add invalid country as a custom error
           (t (c)
             (progn
-              (log-err (format nil "Got exception when processing ~a: ~a" parsed c))
+              (log-err (format nil "Got exception when processing ~a: ~a" params c))
               (postcard-not-sent (format nil "~a" c))))))))
 
 (defun response (env)
