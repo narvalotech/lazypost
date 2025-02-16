@@ -139,15 +139,19 @@
      :delivery-date delivery-date
      :sent-date sent-date)))
 
+(defun delete-db-row-from-lid (db lid)
+  (sqlite:execute-non-query
+   db
+   "DELETE FROM outbox WHERE lid = ?" lid))
+
 (defun delete-db-row (db id)
   (sqlite:execute-non-query
    db
    "DELETE FROM outbox WHERE id = ?" id))
 
-(defun pop-letters-from-db (db iso-date-str)
+(defun peek-letters-from-db (db iso-date-str)
   "Get all the letters that have a delivery date < the date string param."
   (mapcar (lambda (letter)
-            (delete-db-row db (nth 0 letter))
             (make-letter-from-db-row letter))
           (sqlite:execute-to-list
            db
@@ -229,16 +233,20 @@
 (defun get-delivery-date (postcard)
   (local-time:parse-timestring (getf postcard :delivery-date)))
 
-(defun pull-from-the-post (date)
-  (let ((to-send '()))
-    (setf *the-post*
-          (loop for postcard in *the-post*
-                append
-                (when postcard
-                  (if (local-time:timestamp>= date (get-delivery-date postcard))
-                      (progn (push postcard to-send) nil)
-                      (list postcard)))))
-    to-send))
+(defun pull-lid-from-the-post (lid)
+  ;; WOW this function is badly named lol
+  (setf *the-post*
+        (remove-if (lambda (letter)
+                     (equalp (getf letter :lid) lid))
+                   *the-post*)))
+
+(defun peek-from-the-post (date)
+  (loop for postcard in *the-post*
+        append
+        (when (and
+               postcard
+               (local-time:timestamp>= date (get-delivery-date postcard)))
+          (list postcard))))
 
 (ql:quickload :cl-smtp)
 
@@ -305,8 +313,16 @@
     (write-sequence input-vector stream))
   *temp-image-file*)
 
+(defun destroy-letter (lid)
+  (log-dbg (format nil "Deleting letter ~A" lid))
+  (if *use-db*
+      (sqlite:with-open-database (db *db-path*)
+        (delete-db-row-from-lid db lid))
+      (pull-lid-from-the-post lid)))
+
 (defun deliver-postcard (postcard)
   (destructuring-bind (&key
+                         lid
                          text
                          src-email
                          dst-email
@@ -332,7 +348,9 @@
                      attached-file))
 
         (t (send-postcard-fake postcard))
-        ))))
+        ))
+
+    (destroy-letter lid)))
 
 (defun format-date (time)
   (local-time:format-timestring
@@ -346,19 +364,9 @@
 (defun pull-from-outbox (time)
   (if *use-db*
       (sqlite:with-open-database (db *db-path*)
-        (pop-letters-from-db db (format-date time)))
-      (pull-from-the-post time)))
+        (peek-letters-from-db db (format-date time)))
+      (peek-from-the-post time)))
 
-;; TODO: if this fails, then we should push the letters back into the "outbox".
-;; Hopefully we can then fix a bug or restart the app and we don't lose any
-;; data.
-;;
-;; To avoid this:
-;; - peek the letters from the DB
-;; - delete the letters one by one as they are sent
-;;
-;; To achieve this:
-;; - need a unique ID per letter
 (defun send-scheduled-postcards (time)
   (let ((fake-date (make-fake-date time)))
     (log-dbg (format nil  "Delivering today's letters (~A)..." fake-date))
