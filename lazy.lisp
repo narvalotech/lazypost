@@ -40,11 +40,13 @@
   (parse-namestring
    (concatenate 'string *root-path* "/" path-to-file)))
 
-(defun make-postcard (src-country dst-country
+(defun make-postcard (lid
+                      src-country dst-country
                       src-email dst-email
                       message
                       &key image delivery-date sent-date)
   (list
+     :lid lid
      :src-country src-country
      :dst-country dst-country
      :src-email src-email
@@ -60,6 +62,7 @@
   (sqlite:execute-non-query
    db
    "create table outbox (id integer primary key,
+    lid text not null,
     delivery_date text not null,
     sent_date text not null,
     dst_country text not null,
@@ -82,6 +85,7 @@
 
 (defun insert-letter-in-db (db postcard)
   (destructuring-bind (&key
+                         lid
                          text
                          src-country
                          dst-country
@@ -94,7 +98,8 @@
       postcard
     (sqlite:execute-non-query
      db
-     "insert into outbox (delivery_date,
+     "insert into outbox (lid,
+                          delivery_date,
                           sent_date,
                           dst_country,
                           src_country,
@@ -102,7 +107,8 @@
                           src_email,
                           message,
                           media_name,
-                          media) values (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                          media) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+     lid
      delivery-date sent-date
      dst-country src-country
      dst-email src-email
@@ -111,6 +117,7 @@
 
 (defun make-letter-from-db-row (row)
   (destructuring-bind (id
+                       lid
                        delivery-date
                        sent-date
                        dst-country
@@ -122,6 +129,7 @@
                        media) row
     (declare (ignore id))
     (make-postcard
+     lid
      src-country
      dst-country
      src-email
@@ -344,6 +352,13 @@
 ;; TODO: if this fails, then we should push the letters back into the "outbox".
 ;; Hopefully we can then fix a bug or restart the app and we don't lose any
 ;; data.
+;;
+;; To avoid this:
+;; - peek the letters from the DB
+;; - delete the letters one by one as they are sent
+;;
+;; To achieve this:
+;; - need a unique ID per letter
 (defun send-scheduled-postcards (time)
   (let ((fake-date (make-fake-date time)))
     (log-dbg (format nil  "Delivering today's letters (~A)..." fake-date))
@@ -618,6 +633,14 @@
     (unless (image-too-big image) (error "Image too large (>2MB)"))
     ))
 
+(defun generate-letter-id ()
+  (format nil "~A-~A"
+          (get-universal-time)
+          (random 1000000)))
+
+(generate-letter-id)
+ ; => "3948711498-551011"
+
 (defun post-post (env)
   (let* ((params (http-body:parse (getf env :content-type)
                                   (getf env :content-length)
@@ -627,6 +650,7 @@
     (handler-case
         (progn
           (let ((postcard (make-postcard
+                           (generate-letter-id)
                            (read-param "country-sender" parsed)
                            (read-param "country-recipient" parsed)
                            (read-param "email-sender" parsed)
