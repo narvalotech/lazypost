@@ -245,6 +245,9 @@
 (ql:quickload :cl-smtp)
 
 (defvar *use-smtp* nil)
+(defvar *smtp-server* nil)
+(defvar *smtp-user* nil)
+(defvar *smtp-pass* nil)
 
 (defun send-email-smtp (from name to subject message &optional attached-file)
   (cl-smtp:send-email *smtp-server* *smtp-user* to subject message
