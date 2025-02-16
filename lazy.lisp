@@ -320,6 +320,8 @@
         (delete-db-row-from-lid db lid))
       (pull-lid-from-the-post lid)))
 
+(defparameter *send-timeout* 3)
+
 (defun deliver-postcard (postcard)
   (destructuring-bind (&key
                          lid
@@ -331,24 +333,25 @@
       postcard
     (log-inf (format nil  "Sending: ~A -> ~A" src-email dst-email))
 
-    (let ((attached-file
-            (when image
-              (write-to-temporary-file (nth 0 image)))))
-      (cond
-        (*use-sendgrid* (send-email-sendgrid
-                         src-email "The Lazypost Company"
-                         dst-email (make-subject postcard)
-                         text
-                         attached-file))
+    (bt:with-timeout (*send-timeout*)
+      (let ((attached-file
+              (when image
+                (write-to-temporary-file (nth 0 image)))))
+        (cond
+          (*use-sendgrid* (send-email-sendgrid
+                           src-email "The Lazypost Company"
+                           dst-email (make-subject postcard)
+                           text
+                           attached-file))
 
-        (*use-smtp* (send-email-smtp
-                     src-email "The Lazypost Company"
-                     dst-email (make-subject postcard)
-                     text
-                     attached-file))
+          (*use-smtp* (send-email-smtp
+                       src-email "The Lazypost Company"
+                       dst-email (make-subject postcard)
+                       text
+                       attached-file))
 
-        (t (send-postcard-fake postcard))
-        ))
+          (t (send-postcard-fake postcard))
+          )))
 
     (destroy-letter lid)))
 
@@ -382,7 +385,9 @@
 ;;    (lambda ()
 ;;      (loop while t do
 ;;        (let ((current-time (local-time:now)))
-;;          (send-scheduled-postcards current-time)
+;;          (handler-case 
+;;              (send-scheduled-postcards current-time)
+;;            (t (c) (log-err (format nil "Unable to send: ~A~%" c))))
 ;;          (sleep *send-interval-s*))))
 ;;    :name "Postman thread"))
 
