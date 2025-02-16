@@ -543,13 +543,6 @@
 
     (list param-type param)))
 
-;; TODO: error on country not found
-(defun form-params-ok? (parsed)
-  ;; FIXME: validate parameters server-side
-  ;; (log-dbg (format nil  "~A" parsed))
-  (declare (ignore parsed))
-  t)
-
 (defun read-param (name params)
   (loop for param in params do
     (let ((pname (car (cadr param)))
@@ -626,25 +619,23 @@
                                   (getf env :raw-body)))
          (parsed (mapcar #'parse-param params)))
     ;; (log-dbg (format nil  "processing: ~A%" parsed))
-    (if (not (form-params-ok? parsed))
-        (postcard-not-sent)
-        (handler-case
-            (progn
-              (let ((postcard (make-postcard
-                               (read-param "country-sender" parsed)
-                               (read-param "country-recipient" parsed)
-                               (read-param "email-sender" parsed)
-                               (read-param "email-recipient" parsed)
-                               (read-param "message" parsed)
-                               :image (read-param "picture" parsed))))
-                (error-if-not-valid postcard)
-                (send-postcard (add-dates postcard))
-                (postcard-sent)))
-          ;; TODO: add invalid country as a custom error
-          (t (c)
-            (progn
-              (log-err (format nil "Got exception when processing ~a: ~a" params c))
-              (postcard-not-sent (format nil "~a" c))))))))
+    (handler-case
+        (progn
+          (let ((postcard (make-postcard
+                           (read-param "country-sender" parsed)
+                           (read-param "country-recipient" parsed)
+                           (read-param "email-sender" parsed)
+                           (read-param "email-recipient" parsed)
+                           (read-param "message" parsed)
+                           :image (read-param "picture" parsed))))
+            (error-if-not-valid postcard)
+            (send-postcard (add-dates postcard))
+            (postcard-sent)))
+      ;; TODO: add invalid country as a custom error
+      (t (c)
+        (progn
+          (log-err (format nil "Got exception when processing ~a: ~a" params c))
+          (postcard-not-sent (format nil "~a" c)))))))
 
 (defun response (env)
   ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
