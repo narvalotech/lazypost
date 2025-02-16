@@ -534,6 +534,9 @@
             (list context)
             '("[400] ilo li sona ala"))))
 
+(defun static-file (filename)
+  (project-file (concatenate 'string "front/" filename)))
+
 (defun handle-static (env)
   ;; TODO: check that request targets localhost
   (let* ((filename (getf env :path-info))
@@ -543,7 +546,7 @@
         (list
          200
          nil
-         (project-file filename)))))
+         (static-file filename)))))
 
 (ql:quickload :http-body)
 
@@ -710,9 +713,9 @@
 
     ((eql :get (getf env :request-method))
      (cond
-       ((search "/front/" (getf env :path-info) :test #'equalp) (handle-static env))
        ((equalp "/send" (getf env :path-info)) (handle-send env))
-       (t (handle-error))))
+       (t (handle-static env))
+       ))
 
     (t (handle-error))))
 
