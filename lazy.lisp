@@ -535,6 +535,11 @@
     ;; The param as passed from CLACK is a FLEXI-STREAM of type input vector. We
     ;; want to extract the vector as soon as possible to not have to deal with
     ;; it later in the call tree.
+    ;;
+    ;; Note: sometimes, it's a FLEXI-STREAM of another kind, but not already
+    ;; present in memory. It seems to depend on the file size. So we can't
+    ;; really depend on the internal structure, and have to read from a
+    ;; "generic" stream.
     (when (eql param-type :image)
       (let ((data (vector->sarray (stream->vector (nth 1 param))))
             (filename (nth 2 param))
