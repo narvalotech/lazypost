@@ -234,7 +234,7 @@
 
 (ql:quickload :cl-smtp)
 
-(defparameter *use-smtp* nil)
+(defvar *use-smtp* nil)
 
 (defun send-email-smtp (from name to subject message &optional attached-file)
   (cl-smtp:send-email *smtp-server* *smtp-user* to subject message
@@ -248,7 +248,7 @@
 
 (ql:quickload :sendgrid)
 
-(defparameter *use-sendgrid* nil)
+(defvar *use-sendgrid* nil)
 
 ;; TODO: use BT:WITH-TIMEOUT on this. I've seen it get stuck sometimes.
 (defun send-email-sendgrid (from name to subject message &optional attached-file)
@@ -721,5 +721,7 @@
 
 (ql:quickload :clack)
 
-(defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port 8000))
+(defvar *port* 8000)
+
+(defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port *port*))
 
