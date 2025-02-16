@@ -224,12 +224,6 @@
                      (getf postcard :dst-email)))
     (push-to-outbox postcard)))
 
-(defparameter *date-count* 0)
-
-(defun make-fake-date (time)
-  (incf *date-count*)
-  (local-time:timestamp+ time *date-count* :day))
-
 (defun get-delivery-date (postcard)
   (local-time:parse-timestring (getf postcard :delivery-date)))
 
@@ -370,26 +364,40 @@
         (peek-letters-from-db db (format-date time)))
       (peek-from-the-post time)))
 
-(defun send-scheduled-postcards (time)
+(defparameter *date-count* 0)
+
+(defun make-fake-date (time)
+  (incf *date-count*)
+  (local-time:timestamp+ time *date-count* :day))
+
+(defun send-scheduled-postcards-realquick (time)
   (let ((fake-date (make-fake-date time)))
-    (log-dbg (format nil  "Delivering today's letters (~A)..." fake-date))
+    (log-dbg (format nil  "Delivering letters: ~A..." fake-date))
     (mapcar #'deliver-postcard (pull-from-outbox fake-date))))
+
+(defun send-scheduled-postcards (time)
+  (log-dbg (format nil  "Delivering letters: ~A..." time))
+  (mapcar #'deliver-postcard (pull-from-outbox time)))
 
 (ql:quickload :bordeaux-threads)
 
-(defparameter *send-interval-s* 1)
+(defvar *send-interval-s* 3)
 
-;; (progn
-;;   (setf *date-count* 0)
-;;   (bt:make-thread
-;;    (lambda ()
-;;      (loop while t do
-;;        (let ((current-time (local-time:now)))
-;;          (handler-case 
-;;              (send-scheduled-postcards current-time)
-;;            (t (c) (log-err (format nil "Unable to send: ~A~%" c))))
-;;          (sleep *send-interval-s*))))
-;;    :name "Postman thread"))
+(defvar *air-mail* t)
+
+(defun spawn-send-thread ()
+  (setf *date-count* 0)
+  (bt:make-thread
+   (lambda ()
+     (loop while t do
+       (let ((current-time (local-time:now)))
+         (handler-case
+             (if *air-mail*
+                 (send-scheduled-postcards-realquick current-time)
+                 (send-scheduled-postcards current-time))
+           (t (c) (log-err (format nil "Unable to send: ~A~%" c))))
+         (sleep *send-interval-s*))))
+   :name "Postman thread"))
 
 (ql:quickload "read-csv")
 
@@ -701,3 +709,4 @@
 
 (defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port *port*))
 
+(spawn-send-thread)
