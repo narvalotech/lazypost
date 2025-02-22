@@ -26,7 +26,7 @@
 
 (defun poor-mans-log (severity message)
   (unless (yeet-log-message severity)
-    (format t  "[~A] ~A: ~A~%"
+    (format *error-output*  "[~A] ~A: ~A~%"
             (local-time:now)
             (nth 1 (getf *log-levels* severity))
             message)))
@@ -740,6 +740,8 @@
   (bt:join-thread *send-thread*)
 
   (log-inf "Done")
+  (finish-output *error-output*)
+
   (uiop:quit 0)
   )
 
