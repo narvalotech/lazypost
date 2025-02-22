@@ -749,6 +749,9 @@
 ;; (handle-termination 15)
 
 ;; Install the handler
-(setf (trivial-signal:signal-handler :term) #'handle-termination)
-
 (log-inf "Application started")
+
+(defun install-handlers-and-run ()
+  (trivial-signal:signal-handler-bind ((:term #'handle-termination)
+                                       (:int #'handle-termination))
+    (loop while t do (sleep 1))))
