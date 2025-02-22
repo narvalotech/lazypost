@@ -219,7 +219,8 @@
   "Send a delayed postcard. Only accepts text."
   ;; FIXME: validate postcard before adding it
   (when (postcard-valid? postcard)
-    (log-dbg (format nil  "Queue: ~A -> ~A"
+    (log-inf (format nil  "[~A] Queue: ~A -> ~A"
+                     (getf postcard :lid)
                      (getf postcard :src-email)
                      (getf postcard :dst-email)))
     (push-to-outbox postcard)))
@@ -328,7 +329,7 @@
                          image
                        &allow-other-keys)
       postcard
-    (log-inf (format nil  "Sending: ~A -> ~A" src-email dst-email))
+    (log-inf (format nil  "[~A] Send: ~A -> ~A" lid src-email dst-email))
 
     (bt:with-timeout (*send-timeout*)
       (let ((attached-file
