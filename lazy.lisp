@@ -388,19 +388,30 @@
 (defvar *send-interval-s* 3)
 
 (defvar *air-mail* t)
+(defparameter *stop-send-thread* nil)
+
+(defun sleep-one-eye-open (seconds)
+  (let ((small-interval .5)
+        (slept 0))
+    (loop while (and (not *stop-send-thread*)
+                     (< slept seconds))
+          do
+             (progn
+               (sleep small-interval)
+               (incf slept small-interval))))
+  (not *stop-send-thread*))
 
 (defun spawn-send-thread ()
   (setf *date-count* 0)
   (bt:make-thread
    (lambda ()
-     (loop while t do
+     (loop while (sleep-one-eye-open *send-interval-s*) do
        (let ((current-time (local-time:now)))
          (handler-case
              (if *air-mail*
                  (send-scheduled-postcards-realquick current-time)
                  (send-scheduled-postcards current-time))
-           (t (c) (log-err (format nil "Unable to send: ~A~%" c))))
-         (sleep *send-interval-s*))))
+           (t (c) (log-err (format nil "Unable to send: ~A~%" c)))))))
    :name "Postman thread"))
 
 (ql:quickload "read-csv")
@@ -711,6 +722,29 @@
 
 (defvar *port* 8000)
 
-(defvar *handler* (clack:clackup 'response :address "0.0.0.0" :port *port*))
+(defvar *webapp* (clack:clackup 'response :address "0.0.0.0" :port *port*))
 
-(spawn-send-thread)
+(defvar *send-thread* (spawn-send-thread))
+
+(ql:quickload :trivial-signal)
+
+(defun handle-termination (signo)
+  (log-inf (format nil "Graceful shutdown (SIG~A)"
+                   (trivial-signal:signal-name signo)))
+
+  (log-inf "Stopping webapp")
+  (clack:stop *webapp*)
+
+  (log-inf "Stopping email thread")
+  (setf *stop-send-thread* t)
+  (bt:join-thread *send-thread*)
+
+  (log-inf "Done")
+  (uiop:quit 0)
+  )
+
+;; Simulate SIGTERM
+;; (handle-termination 15)
+
+;; Install the handler
+(setf (trivial-signal:signal-handler :term) #'handle-termination)
