@@ -1,0 +1,10 @@
+;; Boy I should really use ASDF
+(ql:quickload :local-time)
+(ql:quickload :sqlite)
+(ql:quickload :cl-smtp)
+(ql:quickload :sendgrid)
+(ql:quickload :bordeaux-threads)
+(ql:quickload :read-csv)
+(ql:quickload :http-body)
+(ql:quickload :clack)
+(ql:quickload :trivial-signal)

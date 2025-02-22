@@ -748,3 +748,5 @@
 
 ;; Install the handler
 (setf (trivial-signal:signal-handler :term) #'handle-termination)
+
+(log-inf "Application started")
