@@ -599,11 +599,13 @@
 
     (list param-type param)))
 
-(defun read-param (name params)
+(defun read-param (params type name)
   (loop for param in params do
-    (let ((pname (car (cadr param)))
+    (let ((ptype (car param))
+          (pname (car (cadr param)))
           (pval (cdr (cadr param))))
-      (when (equalp name pname) (return pval)))))
+      (when (and (equalp type ptype) (equalp name pname))
+        (return pval)))))
 
 (defun postcard-sent ()
   (list 200 '(:content-type "text/plain; charset=utf-8")
@@ -687,12 +689,12 @@
         (progn
           (let ((postcard (make-postcard
                            (generate-letter-id)
-                           (read-param "country-sender" parsed)
-                           (read-param "country-recipient" parsed)
-                           (read-param "email-sender" parsed)
-                           (read-param "email-recipient" parsed)
-                           (read-param "message" parsed)
-                           :image (read-param "picture" parsed))))
+                           (read-param parsed :text "country-sender")
+                           (read-param parsed :text "country-recipient")
+                           (read-param parsed :text "email-sender")
+                           (read-param parsed :text "email-recipient")
+                           (read-param parsed :text "message")
+                           :image (read-param parsed :image "picture"))))
             (error-if-not-valid postcard)
             (send-postcard (add-dates postcard))
             (postcard-sent)))
