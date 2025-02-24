@@ -1,3 +1,4 @@
 *.sqlite
 *.jpg
 .env*
+deploy.sh
