@@ -724,7 +724,9 @@
 
 (defvar *port* 8000)
 
-(defvar *webapp* (clack:clackup 'response :address "0.0.0.0" :port *port*))
+(defvar *webapp* (clack:clackup 'response
+                                :address "0.0.0.0" :port *port*
+                                :debug nil))
 
 (defvar *send-thread* (spawn-send-thread))
 
