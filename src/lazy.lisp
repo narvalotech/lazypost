@@ -608,9 +608,10 @@
         (return pval)))))
 
 (defun postcard-sent ()
-  (list 200 '(:content-type "text/plain; charset=utf-8")
-        ;; TODO: Add delivery delay?
-        '("Your postcard will be delivered in a few days.")))
+  (list
+   200
+   '(:content-type "text/html")
+   (project-file "front/sent.html")))
 
 (defun postcard-not-sent (&optional context)
   (handle-error context))
