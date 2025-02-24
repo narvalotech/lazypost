@@ -165,7 +165,7 @@
   (sqlite:with-open-database (db path)
     (ignore-errors (create-db-table db))))
 
-(defparameter *db-path* (project-file "db.sqlite"))
+(defparameter *db-path* (project-file "data/db.sqlite"))
 
 ;; TODO: move to common init code
 (when *use-db*
@@ -296,7 +296,7 @@
   (format nil "Digital postcard from ~A"
           (getf postcard :src-country)))
 
-(defparameter *temp-image-file* (project-file "picture.jpg"))
+(defparameter *temp-image-file* (project-file "data/picture.jpg"))
 
 (defun write-to-temporary-file (input-vector)
   "Make a temp file and write the input (vector) to it."
