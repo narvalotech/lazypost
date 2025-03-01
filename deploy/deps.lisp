@@ -6,5 +6,7 @@
 (ql:quickload :bordeaux-threads)
 (ql:quickload :read-csv)
 (ql:quickload :http-body)
+(ql:quickload :ironclad)
+(ql:quickload :cl-json)
 (ql:quickload :clack)
 (ql:quickload :trivial-signal)

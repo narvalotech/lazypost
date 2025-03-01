@@ -54,3 +54,41 @@
 
 ;; (loop for i from 0 to 10 collect
 ;;       (send-postcard (add-dates (generate-letter))))
+
+(let ((challenge (generate-and-store-challenge "0.0.0.0")))
+  (destructuring-bind (&key ip salt secret &allow-other-keys)
+      challenge
+    (verify-challenge-response ip salt secret)))
+ ; => T
+
+(let ((challenge (generate-and-store-challenge "0.0.0.0")))
+  (destructuring-bind (&key ip salt secret &allow-other-keys)
+      challenge
+    (verify-challenge-response ip salt 123456)))
+ ; => NIL
+
+(defun client-compute-challenge (salt hash)
+  ;; Algorithm:
+  ;; Start with answer == 0
+  ;; Hash salt + answer
+  ;; If equal -> send answer
+  ;; If not equal -> increment answer and retry
+  (let ((max-iterations 1000000))
+    (loop for answer from 0 to max-iterations do
+      (when (equalp hash
+                    (sha256 (format nil "~A~A" salt answer)))
+        (return answer)))))
+
+(client-compute-challenge 123124 "abcdef1245")
+ ; => NIL
+
+;; This takes between 1.5 and 3.5 seconds to find the solution
+(time
+ (let ((challenge (generate-and-store-challenge "0.0.0.0")))
+   (destructuring-bind (&key ip salt hash &allow-other-keys)
+       challenge
+     (verify-challenge-response
+      ip
+      salt
+      (client-compute-challenge salt hash)))))
+ ; => T

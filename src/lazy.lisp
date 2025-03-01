@@ -705,6 +705,127 @@
           (log-err (format nil "Got exception when processing ~a: ~a" params c))
           (postcard-not-sent (format nil "~a" c)))))))
 
+
+(ql:quickload :ironclad)
+
+(defun sha256 (data)
+  (ironclad:byte-array-to-hex-string
+    (ironclad:digest-sequence :sha256
+                             (ironclad:ascii-string-to-byte-array data))))
+
+;; (sha256 "test")
+ ; => "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
+(defun compute-challenge (salt secret)
+  (sha256 (format nil "~A~A" salt secret)))
+
+;; (compute-challenge 1230980145 123456)
+ ; => "02fd164f30603436624743f4001ed38cd33f2eed0e7f4ba3d5c4660e61e710a9"
+
+(defun get-unix-time ()
+  (local-time:timestamp-to-unix
+   (local-time:now)))
+
+;; (get-unix-time)
+ ; => 1740847677 (31 bits, #x67C33A3D)
+
+(defun calculate-challenge-difficulty (ip)
+  ;; For now, we hardcode it. TODO: increase exponentially by looking at
+  ;; previous requests from IP.
+  (declare (ignore ip))
+  6)
+
+(defun generate-secret (level)
+  "Generate a secret number with LEVEL amount of digits"
+  (random (expt 10 level)))
+
+(defun make-challenge (ip hash time salt secret)
+  (list
+   :ip ip
+   :hash hash
+   :time time
+   :salt salt
+   :secret secret))
+
+(defun generate-challenge (ip)
+  (let* ((difficulty (calculate-challenge-difficulty ip))
+         (time (get-unix-time))
+         (secret (generate-secret difficulty))
+         (salt (sxhash (format nil "~A~A~A" ip time (random 1000)))))
+
+    (log-dbg (format nil "Generating challenge: IP ~A TS ~A SECRET ~A"
+                     ip time secret))
+
+    (make-challenge
+     ip
+     (compute-challenge salt secret)
+     time
+     salt
+     secret)))
+
+(generate-challenge "127.0.0.1")
+ ; => (:IP "127.0.0.1" :HASH
+ ; "430621b3a0072fcdf4c8413eefad55e7e2d4f940aa5d1f27882f29a199551665" :TIME
+ ; 1740851506 :SALT 2184513279468597411 :SECRET 991550)
+
+(ql:quickload :cl-json)
+
+(defun challenge->json (hash salt)
+  (json:encode-json-to-string
+   (list
+    (cons "challenge"
+          (list
+           (cons "hash" hash)
+           (cons "salt" salt))))))
+
+(challenge->json "abc" "1234")
+ ; => "{\"challenge\":{\"hash\":\"abc\",\"salt\":\"1234\"}}"
+
+(defun store-challenge (table ip unix-time salt secret)
+  (setf (gethash salt table)
+        (make-challenge
+         ip "" unix-time salt secret)))
+
+(defparameter *challenges*
+  (make-hash-table))
+
+(defun generate-and-store-challenge (ip)
+  (let ((challenge (generate-challenge ip)))
+    (destructuring-bind (&key time salt secret &allow-other-keys)
+        challenge
+
+      ;; TODO: perform garbage collection here?
+      (store-challenge *challenges* ip time salt secret)
+
+      challenge)))
+
+(defun handle-challenge-request (env)
+  (let ((ip (getf env :remote-addr)))
+    (destructuring-bind (&key hash salt &allow-other-keys)
+        (generate-and-store-challenge ip)
+
+      (list
+       200
+       '(:content-type "text/json")
+       (list (challenge->json hash salt))))))
+
+(defun not-that-far-back (old now)
+  (local-time:timestamp>
+   old
+   (local-time:timestamp- now 10 :minute)))
+
+(defun verify-challenge-response (client-ip salt answer)
+  (let ((challenge (gethash salt *challenges*)))
+    (when challenge
+      (remhash salt *challenges*)       ; No brute-forcing here..
+      (destructuring-bind (&key time secret ip &allow-other-keys)
+          challenge
+        (and
+         (not-that-far-back (local-time:unix-to-timestamp time)
+                            (local-time:now))
+         (equalp ip client-ip)
+         (= secret answer))))))
+
 (defun response (env)
   ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
   ;; (break)
@@ -715,7 +836,12 @@
 
     ((eql :get (getf env :request-method))
      (cond
-       ((equalp "/send" (getf env :path-info)) (handle-send env))
+       ((equalp "/request-challenge" (getf env :path-info))
+        (handle-challenge-request env))
+
+       ((equalp "/send" (getf env :path-info))
+        (handle-send env))
+
        (t (handle-static env))
        ))
 
