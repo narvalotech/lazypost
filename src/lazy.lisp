@@ -414,7 +414,7 @@
            (t (c) (log-err (format nil "Unable to send: ~A~%" c)))))))
    :name "Postman thread"))
 
-(ql:quickload "read-csv")
+(ql:quickload :read-csv)
 
 (defun read-country-db ()
   (let ((csv
