@@ -322,6 +322,22 @@
 
 (defvar *send-page-path* "/send")
 
+(defun message-footer (src-email)
+  (format nil "~%
+------------------
+This postcard was sent by ~A through lazypost.net
+To send one back, go to lazypost.net~A
+
+If you think this is SPAM, please forward this email
+to abuse@lazypost.net
+"
+          src-email
+          *send-page-path*))
+
+(defun append-footer (text src-email)
+  (concatenate 'string
+               text (message-footer src-email)))
+
 (defun deliver-postcard (postcard)
   (destructuring-bind (&key
                          lid
@@ -341,13 +357,13 @@
           (*use-sendgrid* (send-email-sendgrid
                            src-email "The Lazypost Company"
                            dst-email (make-subject postcard)
-                           text
+                           (append-footer text src-email)
                            attached-file))
 
           (*use-smtp* (send-email-smtp
                        src-email "The Lazypost Company"
                        dst-email (make-subject postcard)
-                       text
+                       (append-footer text src-email)
                        attached-file))
 
           (t (send-postcard-fake postcard))
