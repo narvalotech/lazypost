@@ -837,16 +837,14 @@
      (post-post env))
 
     ((eql :get (getf env :request-method))
-     (cond
-       ((equalp "/request-challenge" (getf env :path-info))
-        (handle-challenge-request env))
+     (alexandria:switch ((getf env :path-info) :test #'equalp)
 
-       ((equalp *send-page-path* (getf env :path-info))
-        (handle-send env))
+       ("/request-challenge" (handle-challenge-request env))
+
+       (*send-page-path* (handle-send env))
 
        ;; TODO: change this to redirect to about page when we have it
-       ((equalp "/index.html" (getf env :path-info))
-        (handle-error))
+       ("/index.html" (handle-error))
 
        (t (handle-static env))
        ))
