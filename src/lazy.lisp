@@ -806,6 +806,8 @@
     (destructuring-bind (&key hash salt &allow-other-keys)
         (generate-and-store-challenge ip)
 
+      (log-inf (format nil "Serving challenge for ~A" ip))
+
       (list
        200
        '(:content-type "text/json")
