@@ -419,11 +419,12 @@ to abuse@lazypost.net
                (incf slept small-interval))))
   (not *stop-send-thread*))
 
-(defun spawn-send-thread ()
+(defun spawn-send-thread (periodic-fn)
   (setf *date-count* 0)
   (bt:make-thread
    (lambda ()
      (loop while (sleep-one-eye-open *send-interval-s*) do
+       (funcall periodic-fn)
        (let ((current-time (local-time:now)))
          (handler-case
              (if *air-mail*
@@ -807,6 +808,28 @@ to abuse@lazypost.net
 (defparameter *challenges*
   (make-hash-table))
 
+(defun long-ago (old now)
+  (local-time:timestamp<
+   old
+   (local-time:timestamp- now 10 :minute)))
+
+(defun delete-expired-challenge (key value)
+  (let* ((challenge-unixtime (getf value :time))
+         (challenge-ts
+           (local-time:unix-to-timestamp challenge-unixtime)))
+
+    (when (long-ago challenge-ts
+                    (local-time:now))
+      (log-dbg (format nil "Deleting old challenge: IP ~A secret ~A"
+                       (getf value :ip)
+                       (getf value :secret)))
+      (remhash key *challenges*))))
+
+;; (maphash #'delete-expired-challenge *challenges*)
+
+(defun delete-expired-challenges ()
+  (maphash #'delete-expired-challenge *challenges*))
+
 (defun generate-and-store-challenge (ip)
   (let ((challenge (generate-challenge ip)))
     (destructuring-bind (&key time salt secret &allow-other-keys)
@@ -829,11 +852,6 @@ to abuse@lazypost.net
        '(:content-type "text/json")
        (list (challenge->json hash salt))))))
 
-(defun not-that-far-back (old now)
-  (local-time:timestamp>
-   old
-   (local-time:timestamp- now 10 :minute)))
-
 (defun verify-challenge-response (client-ip salt answer)
   (let ((challenge (gethash salt *challenges*)))
     (when challenge
@@ -841,8 +859,8 @@ to abuse@lazypost.net
       (destructuring-bind (&key time secret ip &allow-other-keys)
           challenge
         (and
-         (not-that-far-back (local-time:unix-to-timestamp time)
-                            (local-time:now))
+         (not (long-ago (local-time:unix-to-timestamp time)
+                        (local-time:now)))
          (equalp ip client-ip)
          (= secret answer))))))
 
@@ -877,7 +895,7 @@ to abuse@lazypost.net
                                 :address "0.0.0.0" :port *port*
                                 :debug nil))
 
-(defvar *send-thread* (spawn-send-thread))
+(defvar *send-thread* (spawn-send-thread #'delete-expired-challenges))
 
 (ql:quickload :trivial-signal)
 
