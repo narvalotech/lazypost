@@ -320,6 +320,8 @@
 
 (defparameter *send-timeout* 3)
 
+(defvar *send-page-path* "/send")
+
 (defun deliver-postcard (postcard)
   (destructuring-bind (&key
                          lid
@@ -839,8 +841,12 @@
        ((equalp "/request-challenge" (getf env :path-info))
         (handle-challenge-request env))
 
-       ((equalp "/send" (getf env :path-info))
+       ((equalp *send-page-path* (getf env :path-info))
         (handle-send env))
+
+       ;; TODO: change this to redirect to about page when we have it
+       ((equalp "/index.html" (getf env :path-info))
+        (handle-error))
 
        (t (handle-static env))
        ))
