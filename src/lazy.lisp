@@ -4,13 +4,14 @@
 (ql:quickload :local-time)
 
 (defparameter *log-levels*
-  '(:dbg (4 "DEBG")
+  '(:tra (5 "TRAC")
+    :dbg (4 "DEBG")
     :inf (3 "INFO")
     :wrn (2 "WARN")
     :err (1 "ERRR")
     ))
 
-(defparameter *current-log-level* :inf)
+(defparameter *current-log-level* :dbg)
 
 (defun yeet-log-message (severity)
   (let ((current-severity (nth 0 (getf *log-levels* *current-log-level*)))
@@ -31,6 +32,7 @@
             (nth 1 (getf *log-levels* severity))
             message)))
 
+(defun log-trace (message) (poor-mans-log :tra message))
 (defun log-dbg (message) (poor-mans-log :dbg message))
 (defun log-inf (message) (poor-mans-log :inf message))
 (defun log-wrn (message) (poor-mans-log :wrn message))
@@ -394,11 +396,11 @@ to abuse@lazypost.net
 
 (defun send-scheduled-postcards-realquick (time)
   (let ((fake-date (make-fake-date time)))
-    (log-dbg (format nil  "Delivering letters: ~A..." fake-date))
+    (log-trace (format nil  "Delivering letters: ~A..." fake-date))
     (mapcar #'deliver-postcard (pull-from-outbox fake-date))))
 
 (defun send-scheduled-postcards (time)
-  (log-dbg (format nil  "Delivering letters: ~A..." time))
+  (log-trace (format nil  "Delivering letters: ~A..." time))
   (mapcar #'deliver-postcard (pull-from-outbox time)))
 
 (ql:quickload :bordeaux-threads)
