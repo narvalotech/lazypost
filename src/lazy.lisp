@@ -756,9 +756,23 @@ to abuse@lazypost.net
   (declare (ignore ip))
   6)
 
+(defun pad-number (number digits)
+  (loop while (> 1 (/ number (expt 10 (- digits 1))))
+        do (setf number (* number 10)))
+  number)
+
+(pad-number 12345 6)
+ ; => 123450 (17 bits, #x1E23A)
+
+(pad-number 123456 6)
+ ; => 123456 (17 bits, #x1E240)
+
 (defun generate-secret (level)
   "Generate a secret number with LEVEL amount of digits"
-  (random (expt 10 level)))
+  (pad-number (random (expt 10 level)) level))
+
+(generate-secret 6)
+ ; => 113500 (17 bits, #x1BB5C)
 
 (defun make-challenge (ip hash time salt secret)
   (list
