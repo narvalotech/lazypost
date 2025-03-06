@@ -670,7 +670,14 @@ to abuse@lazypost.net
 (defun image-too-big (image)
   (< (length (car image)) 2000000))
 
-(defun error-if-not-valid (postcard)
+(defun correct-answer? (response)
+  (destructuring-bind (&key ip salt answer)
+      response
+    (verify-challenge-response ip
+                               (parse-integer salt)
+                               (parse-integer answer))))
+
+(defun error-if-not-valid (postcard challenge-rsp)
   (destructuring-bind (&key
                          src-country
                          dst-country
@@ -679,6 +686,9 @@ to abuse@lazypost.net
                          image
                        &allow-other-keys)
       postcard
+
+    (unless (correct-answer? challenge-rsp)
+      (error "Incorrect or stale challenge answer"))
 
     (unless
         (find-country *country-db* src-country)
@@ -705,7 +715,10 @@ to abuse@lazypost.net
   (let* ((params (http-body:parse (getf env :content-type)
                                   (getf env :content-length)
                                   (getf env :raw-body)))
-         (parsed (mapcar #'parse-param params)))
+         (parsed (mapcar #'parse-param params))
+         (challenge-rsp (list :ip (getf env :remote-addr)
+                              :salt (read-param parsed :text "s")
+                              :answer (read-param parsed :text "a"))))
     ;; (log-dbg (format nil  "processing: ~A%" parsed))
     (handler-case
         (progn
@@ -717,7 +730,7 @@ to abuse@lazypost.net
                            (read-param parsed :text "email-recipient")
                            (read-param parsed :text "message")
                            :image (read-param parsed :image "picture"))))
-            (error-if-not-valid postcard)
+            (error-if-not-valid postcard challenge-rsp)
             (send-postcard (add-dates postcard))
             (postcard-sent)))
       ;; TODO: add invalid country as a custom error
@@ -866,7 +879,7 @@ to abuse@lazypost.net
       (list
        200
        '(:content-type "text/json")
-       (list (challenge->json hash salt))))))
+       (list (challenge->json hash (format nil "~A" salt)))))))
 
 (defun verify-challenge-response (client-ip salt answer)
   (let ((challenge (gethash salt *challenges*)))
