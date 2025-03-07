@@ -958,7 +958,7 @@ to abuse@lazypost.net
 ;; (handle-termination 15)
 
 ;; Install the handler
-(log-inf "Application started")
+(log-inf (format nil "Application started (port ~A)" *port*))
 
 (defun install-handlers-and-run ()
   (trivial-signal:signal-handler-bind ((:term #'handle-termination)
