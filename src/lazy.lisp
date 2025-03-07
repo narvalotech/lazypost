@@ -764,10 +764,12 @@ to abuse@lazypost.net
  ; => 1740847677 (31 bits, #x67C33A3D)
 
 (defun calculate-challenge-difficulty (ip)
-  ;; For now, we hardcode it. TODO: increase exponentially by looking at
-  ;; previous requests from IP.
+  ;; For now, we hardcode it.
+  ;; TODO: increase exponentially by looking at previous requests from IP.
+  ;; TODO: lower difficulty when using mobile Or distribute small challenges,
+  ;; until a specific measured time is reached on the server.
   (declare (ignore ip))
-  6)
+  4)
 
 (defun pad-number (number digits)
   (loop while (> 1 (/ number (expt 10 (- digits 1))))
