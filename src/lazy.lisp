@@ -565,6 +565,161 @@ to abuse@lazypost.net
 
 (ql:quickload :http-body)
 
+(ql:quickload :ironclad)
+
+(defun sha256 (data)
+  (ironclad:byte-array-to-hex-string
+    (ironclad:digest-sequence :sha256
+                             (ironclad:ascii-string-to-byte-array data))))
+
+;; (sha256 "test")
+ ; => "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
+(defun compute-challenge (salt secret)
+  (sha256 (format nil "~A~A" salt secret)))
+
+;; (compute-challenge 1230980145 123456)
+ ; => "02fd164f30603436624743f4001ed38cd33f2eed0e7f4ba3d5c4660e61e710a9"
+
+(defun get-unix-time ()
+  (local-time:timestamp-to-unix
+   (local-time:now)))
+
+;; (get-unix-time)
+ ; => 1740847677 (31 bits, #x67C33A3D)
+
+(defun calculate-challenge-difficulty (ip)
+  ;; For now, we hardcode it.
+  ;; TODO: increase exponentially by looking at previous requests from IP.
+  ;; TODO: lower difficulty when using mobile Or distribute small challenges,
+  ;; until a specific measured time is reached on the server.
+  (declare (ignore ip))
+  4)
+
+(defun pad-number (number digits)
+  (loop while (> 1 (/ number (expt 10 (- digits 1))))
+        do (setf number (* number 10)))
+  number)
+
+(pad-number 12345 6)
+ ; => 123450 (17 bits, #x1E23A)
+
+(pad-number 123456 6)
+ ; => 123456 (17 bits, #x1E240)
+
+(defun generate-secret (level)
+  "Generate a secret number with LEVEL amount of digits"
+  (pad-number (random (expt 10 level)) level))
+
+(generate-secret 6)
+ ; => 113500 (17 bits, #x1BB5C)
+
+(defun make-challenge (ip hash time salt secret)
+  (list
+   :ip ip
+   :hash hash
+   :time time
+   :salt salt
+   :secret secret))
+
+(defun generate-challenge (ip)
+  (let* ((difficulty (calculate-challenge-difficulty ip))
+         (time (get-unix-time))
+         (secret (generate-secret difficulty))
+         (salt (sxhash (format nil "~A~A~A" ip time (random 1000)))))
+
+    (log-dbg (format nil "Generating challenge: IP ~A TS ~A SECRET ~A"
+                     ip time secret))
+
+    (make-challenge
+     ip
+     (compute-challenge salt secret)
+     time
+     salt
+     secret)))
+
+(generate-challenge "127.0.0.1")
+ ; => (:IP "127.0.0.1" :HASH
+ ; "430621b3a0072fcdf4c8413eefad55e7e2d4f940aa5d1f27882f29a199551665" :TIME
+ ; 1740851506 :SALT 2184513279468597411 :SECRET 991550)
+
+(ql:quickload :cl-json)
+
+(defun challenge->json (hash salt)
+  (json:encode-json-to-string
+   (list
+    (cons "challenge"
+          (list
+           (cons "hash" hash)
+           (cons "salt" salt))))))
+
+(challenge->json "abc" "1234")
+ ; => "{\"challenge\":{\"hash\":\"abc\",\"salt\":\"1234\"}}"
+
+(defun store-challenge (table ip unix-time salt secret)
+  (setf (gethash salt table)
+        (make-challenge
+         ip "" unix-time salt secret)))
+
+(defparameter *challenges*
+  (make-hash-table))
+
+(defun long-ago (old now)
+  (local-time:timestamp<
+   old
+   (local-time:timestamp- now 10 :minute)))
+
+(defun delete-expired-challenge (key value)
+  (let* ((challenge-unixtime (getf value :time))
+         (challenge-ts
+           (local-time:unix-to-timestamp challenge-unixtime)))
+
+    (when (long-ago challenge-ts
+                    (local-time:now))
+      (log-dbg (format nil "Deleting old challenge: IP ~A secret ~A"
+                       (getf value :ip)
+                       (getf value :secret)))
+      (remhash key *challenges*))))
+
+;; (maphash #'delete-expired-challenge *challenges*)
+
+(defun delete-expired-challenges ()
+  (maphash #'delete-expired-challenge *challenges*))
+
+(defun generate-and-store-challenge (ip)
+  (let ((challenge (generate-challenge ip)))
+    (destructuring-bind (&key time salt secret &allow-other-keys)
+        challenge
+
+      ;; TODO: perform garbage collection here?
+      (store-challenge *challenges* ip time salt secret)
+
+      challenge)))
+
+(defun handle-challenge-request (env)
+  (let ((ip (getf env :remote-addr)))
+    (destructuring-bind (&key hash salt &allow-other-keys)
+        (generate-and-store-challenge ip)
+
+      (log-inf (format nil "Serving challenge for ~A" ip))
+
+      (list
+       200
+       '(:content-type "text/json")
+       (list (challenge->json hash (format nil "~A" salt)))))))
+
+(defun verify-challenge-response (client-ip salt answer)
+  (let ((challenge (gethash salt *challenges*)))
+    (when challenge
+      (remhash salt *challenges*)       ; No brute-forcing here..
+      (destructuring-bind (&key time secret ip &allow-other-keys)
+          challenge
+        (and
+         (not (long-ago (local-time:unix-to-timestamp time)
+                        (local-time:now)))
+         (equalp ip client-ip)
+         (= secret answer))))))
+
 (defun param-is-binary? (param)
   ;; http-body returns a cons if the parameter is text and a list
   ;; if the param is binary or image.
@@ -738,162 +893,6 @@ to abuse@lazypost.net
         (progn
           (log-err (format nil "Got exception when processing ~a: ~a" params c))
           (postcard-not-sent (format nil "~a" c)))))))
-
-
-(ql:quickload :ironclad)
-
-(defun sha256 (data)
-  (ironclad:byte-array-to-hex-string
-    (ironclad:digest-sequence :sha256
-                             (ironclad:ascii-string-to-byte-array data))))
-
-;; (sha256 "test")
- ; => "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
-
-(defun compute-challenge (salt secret)
-  (sha256 (format nil "~A~A" salt secret)))
-
-;; (compute-challenge 1230980145 123456)
- ; => "02fd164f30603436624743f4001ed38cd33f2eed0e7f4ba3d5c4660e61e710a9"
-
-(defun get-unix-time ()
-  (local-time:timestamp-to-unix
-   (local-time:now)))
-
-;; (get-unix-time)
- ; => 1740847677 (31 bits, #x67C33A3D)
-
-(defun calculate-challenge-difficulty (ip)
-  ;; For now, we hardcode it.
-  ;; TODO: increase exponentially by looking at previous requests from IP.
-  ;; TODO: lower difficulty when using mobile Or distribute small challenges,
-  ;; until a specific measured time is reached on the server.
-  (declare (ignore ip))
-  4)
-
-(defun pad-number (number digits)
-  (loop while (> 1 (/ number (expt 10 (- digits 1))))
-        do (setf number (* number 10)))
-  number)
-
-(pad-number 12345 6)
- ; => 123450 (17 bits, #x1E23A)
-
-(pad-number 123456 6)
- ; => 123456 (17 bits, #x1E240)
-
-(defun generate-secret (level)
-  "Generate a secret number with LEVEL amount of digits"
-  (pad-number (random (expt 10 level)) level))
-
-(generate-secret 6)
- ; => 113500 (17 bits, #x1BB5C)
-
-(defun make-challenge (ip hash time salt secret)
-  (list
-   :ip ip
-   :hash hash
-   :time time
-   :salt salt
-   :secret secret))
-
-(defun generate-challenge (ip)
-  (let* ((difficulty (calculate-challenge-difficulty ip))
-         (time (get-unix-time))
-         (secret (generate-secret difficulty))
-         (salt (sxhash (format nil "~A~A~A" ip time (random 1000)))))
-
-    (log-dbg (format nil "Generating challenge: IP ~A TS ~A SECRET ~A"
-                     ip time secret))
-
-    (make-challenge
-     ip
-     (compute-challenge salt secret)
-     time
-     salt
-     secret)))
-
-(generate-challenge "127.0.0.1")
- ; => (:IP "127.0.0.1" :HASH
- ; "430621b3a0072fcdf4c8413eefad55e7e2d4f940aa5d1f27882f29a199551665" :TIME
- ; 1740851506 :SALT 2184513279468597411 :SECRET 991550)
-
-(ql:quickload :cl-json)
-
-(defun challenge->json (hash salt)
-  (json:encode-json-to-string
-   (list
-    (cons "challenge"
-          (list
-           (cons "hash" hash)
-           (cons "salt" salt))))))
-
-(challenge->json "abc" "1234")
- ; => "{\"challenge\":{\"hash\":\"abc\",\"salt\":\"1234\"}}"
-
-(defun store-challenge (table ip unix-time salt secret)
-  (setf (gethash salt table)
-        (make-challenge
-         ip "" unix-time salt secret)))
-
-(defparameter *challenges*
-  (make-hash-table))
-
-(defun long-ago (old now)
-  (local-time:timestamp<
-   old
-   (local-time:timestamp- now 10 :minute)))
-
-(defun delete-expired-challenge (key value)
-  (let* ((challenge-unixtime (getf value :time))
-         (challenge-ts
-           (local-time:unix-to-timestamp challenge-unixtime)))
-
-    (when (long-ago challenge-ts
-                    (local-time:now))
-      (log-dbg (format nil "Deleting old challenge: IP ~A secret ~A"
-                       (getf value :ip)
-                       (getf value :secret)))
-      (remhash key *challenges*))))
-
-;; (maphash #'delete-expired-challenge *challenges*)
-
-(defun delete-expired-challenges ()
-  (maphash #'delete-expired-challenge *challenges*))
-
-(defun generate-and-store-challenge (ip)
-  (let ((challenge (generate-challenge ip)))
-    (destructuring-bind (&key time salt secret &allow-other-keys)
-        challenge
-
-      ;; TODO: perform garbage collection here?
-      (store-challenge *challenges* ip time salt secret)
-
-      challenge)))
-
-(defun handle-challenge-request (env)
-  (let ((ip (getf env :remote-addr)))
-    (destructuring-bind (&key hash salt &allow-other-keys)
-        (generate-and-store-challenge ip)
-
-      (log-inf (format nil "Serving challenge for ~A" ip))
-
-      (list
-       200
-       '(:content-type "text/json")
-       (list (challenge->json hash (format nil "~A" salt)))))))
-
-(defun verify-challenge-response (client-ip salt answer)
-  (let ((challenge (gethash salt *challenges*)))
-    (when challenge
-      (remhash salt *challenges*)       ; No brute-forcing here..
-      (destructuring-bind (&key time secret ip &allow-other-keys)
-          challenge
-        (and
-         (not (long-ago (local-time:unix-to-timestamp time)
-                        (local-time:now)))
-         (equalp ip client-ip)
-         (= secret answer))))))
 
 (defun response (env)
   ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
