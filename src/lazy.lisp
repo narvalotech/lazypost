@@ -664,6 +664,9 @@ to abuse@lazypost.net
 (defparameter *challenges*
   (make-hash-table))
 
+(defparameter *challenges-lock*
+  (bt:make-lock "challenges"))
+
 (defun long-ago (old now)
   (local-time:timestamp<
    old
@@ -679,7 +682,8 @@ to abuse@lazypost.net
       (log-dbg (format nil "Deleting old challenge: IP ~A secret ~A"
                        (getf value :ip)
                        (getf value :secret)))
-      (remhash key *challenges*))))
+      (bt:with-lock-held (*challenges-lock*)
+        (remhash key *challenges*)))))
 
 ;; (maphash #'delete-expired-challenge *challenges*)
 
@@ -691,8 +695,8 @@ to abuse@lazypost.net
     (destructuring-bind (&key time salt secret &allow-other-keys)
         challenge
 
-      ;; TODO: perform garbage collection here?
-      (store-challenge *challenges* ip time salt secret)
+      (bt:with-lock-held (*challenges-lock*)
+        (store-challenge *challenges* ip time salt secret))
 
       challenge)))
 
@@ -711,7 +715,8 @@ to abuse@lazypost.net
 (defun verify-challenge-response (client-ip salt answer)
   (let ((challenge (gethash salt *challenges*)))
     (when challenge
-      (remhash salt *challenges*)       ; No brute-forcing here..
+      (bt:with-lock-held (*challenges-lock*)
+        (remhash salt *challenges*))    ; No brute-forcing here..
       (destructuring-bind (&key time secret ip &allow-other-keys)
           challenge
         (and
