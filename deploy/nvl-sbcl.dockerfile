@@ -6,7 +6,7 @@ COPY . /app
 
 ADD https://beta.quicklisp.org/quicklisp.lisp /root/quicklisp.lisp
 
-RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y sqlite3 gcc ca-certificates
+RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y sqlite3 gcc ca-certificates libev4
 
 RUN set -x; \
   sbcl --load /root/quicklisp.lisp \

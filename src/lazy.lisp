@@ -690,6 +690,9 @@ to abuse@lazypost.net
 (defun delete-expired-challenges ()
   (maphash #'delete-expired-challenge *challenges*))
 
+(defun delete-expired-challenges ()
+  nil)
+
 (defun generate-and-store-challenge (ip)
   (let ((challenge (generate-challenge ip)))
     (destructuring-bind (&key time salt secret &allow-other-keys)
@@ -930,15 +933,74 @@ to abuse@lazypost.net
 
     (t (handle-error))))
 
+;; (ql:quickload :slynk)
+
+;; (defun slynk-listener-thread-p (thread)
+;;   "Check if the given thread is a Slynk listener thread."
+;;   (let ((thread-name (sb-thread:thread-name thread)))
+;;     (format t "thread: ~A~%" thread-name)
+;;     (and thread-name
+;;          (search "slynk" thread-name :test #'equalp))))
+
+;; (defun slynk-server-running-p ()
+;;   "Check if there is any active Slynk listener thread."
+;;   (some #'slynk-listener-thread-p (sb-thread:list-all-threads)))
+
+;; (unless (slynk-server-running-p)
+;;   (format t "Starting SLYNK server~%")
+;;   (slynk:create-server :port 42069 :dont-close t))
+
 (ql:quickload :clack)
 
 (defvar *port* 8000)
 
-(defvar *webapp* (clack:clackup 'response
-                                :address "0.0.0.0" :port *port*
-                                :debug nil))
+(ql:quickload :woo)
 
-(defvar *send-thread* (spawn-send-thread #'delete-expired-challenges))
+(defvar *webapp* nil)
+(require :sb-sprof)
+(setf *webapp* (clack:clackup 'response
+                              :address "0.0.0.0" :port *port*
+                              :debug nil
+                              :server :woo
+                              :use-default-middlewares nil))
+
+(defun list-threads-sbcl ()
+  (format t "~%~{~A~%~}"
+          (mapcar (lambda (thread)
+                    (format nil "Thread: ~A (Status: ~A)"
+                            (sb-thread:thread-name thread)
+                            (if (sb-thread:thread-alive-p thread) "RUNNING" "FINISHED")))
+                  (sb-thread:list-all-threads))))
+
+(list-threads-sbcl)
+
+(require :sb-sprof)
+
+(push "/app/ql" ql:*local-project-directories*)
+
+(ql:quickload :tracer)
+
+;; Profile a specific thread
+;; (bt:make-thread
+;;  (lambda ()
+;;    (let ((thread-to-profile (find "clack-handler-woo" (sb-thread:list-all-threads)
+;;                                   :key #'sb-thread:thread-name :test #'string=)))
+;;      (flamegraph:save-flame-graph ("/app/t.stack" :threads (list thread-to-profile))
+;;                                   ;; Wait for some time while the thread is running
+;;                                   (sleep 10)))))
+
+(bt:make-thread
+ (lambda ()
+   (tracer:with-tracing ("CL-USER" "WOO")
+     (sleep 20))
+   (tracer:save-report "report.json")
+   (log-inf "###### Done tracing ######")))
+
+;; (defvar *webapp* (clack:clackup 'response
+;;                                 :address "0.0.0.0" :port *port*
+;;                                 :debug nil))
+
+;; (defvar *send-thread* (spawn-send-thread #'delete-expired-challenges))
 
 (ql:quickload :trivial-signal)
 
