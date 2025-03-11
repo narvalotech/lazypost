@@ -622,11 +622,135 @@ to abuse@lazypost.net
    :salt salt
    :secret secret))
 
+(defun generate-iv (bytes)
+  (ironclad:make-random-salt bytes))
+
+(defun make-aes-cipher (key &optional (iv (generate-iv 12)))
+  (declare (type (simple-array (unsigned-byte 8) (*)) key iv))
+  (ironclad:make-authenticated-encryption-mode
+   :gcm
+   :key key
+   :cipher-name :aes
+   :initialization-vector iv))
+
+(defun encrypt (key message)
+  (declare (type string key message))
+  (let* ((iv-len 12)
+         (iv (generate-iv iv-len))
+         (cipher (make-aes-cipher (string-to-octets key) iv))
+         (encrypted (ironclad:encrypt-message cipher (string-to-octets message)))
+         (result (make-array (+ iv-len (length encrypted))
+                             :element-type '(unsigned-byte 8))))
+    (replace result iv)
+    (replace result encrypted :start1 iv-len)
+    (ironclad:byte-array-to-hex-string result)))
+
+(defvar *challenge-key* "really-topsecret")
+
+(encrypt *challenge-key* "try this, hackers!")
+ ; => "81638a350d38ef23f269408a8a2bcb7a8ae4eea40560c3d132902d2c64dd"
+
+(defun decrypt (key encrypted)
+  (declare (type string key encrypted))
+  (let* ((encrypted-bytes (ironclad:hex-string-to-byte-array encrypted))
+         (iv-len 12)
+         (iv (subseq encrypted-bytes 0 iv-len))
+         (cipher (make-aes-cipher (string-to-octets key) iv)))
+    ;; Should I use in-place decryption?
+    (octets-to-string
+     (ironclad:decrypt-message cipher (subseq encrypted-bytes iv-len)))))
+
+(decrypt *challenge-key*
+         (encrypt *challenge-key* "try this, hackers!"))
+ ; => "try this, hackers!"
+
+;; Scheme:
+;; - generate salt:
+;;   - unixtime + delta + ip (fixed-length)
+;; - encrypt salt
+;; - add nonce to encrypted salt
+;; - generate challenge (salt + number)
+;; - send enc-salt + hash to client
+;;
+;; (optimization)
+;; ironclad can write to result buf directly if length constant
+;;
+;; on RX
+;; - read nonce from salt
+;; - decrypt salt
+;; - check integrity. fail if not
+;; - check hash. fail if not
+;; - (propose new challenge if time delta to small)
+;; - accept challenge, process letter.
+
+(defun make-adjustable-string (s)
+  (make-array (length s)
+              :fill-pointer (length s)
+              :adjustable t
+              :initial-contents s
+              :element-type (array-element-type s)))
+
+(defun string-split (str &key (what-char #\  ))
+  "Splits a string across WHAT-CHAR. Defaults to ascii space."
+  (let ((tokens)
+        (token (make-adjustable-string "")))
+    (loop for c across str
+          do (if (equal c what-char)
+                 (progn
+                   (push (copy-seq token) tokens)
+                   (setf (fill-pointer token) 0))
+                 (progn
+                   (vector-push-extend c token))))
+    (push token tokens)
+    (nreverse tokens)))
+
+(defun format-ip (ip)
+  (format nil "~{~2,'0X~}"
+          (mapcar #'parse-integer
+                  (string-split ip :what-char #\.))))
+
+(format-ip "192.168.0.12")
+ ; => "C0A8000C"
+
+(defun encode-salt (ip time delta r)
+  (format nil "~A.~A.~A.~A" (format-ip ip) time delta r))
+
+(encode-salt "192.168.0.2" (get-unix-time) 450 987)
+ ; => "C0A80002.1741672965.450.987"
+
+;; I don't really have to decode the IP, do I?
+;; I can just compare the encoded strings I think.
+;; TODO: profile and optimize this out when I do the other IP rework.
+(defun decode-ip (ip-string)
+  (format nil "~{~A~^.~}"
+          (mapcar (lambda (byte) (parse-integer byte :radix 16))
+                  (loop for i from 0 to 6 by 2
+                        collect (subseq ip-string i (+ i 2))))))
+
+(decode-ip "C0A80002")
+ ; => "192.168.0.2"
+
+(defun decode-salt (salt)
+  (destructuring-bind (encoded-ip time delta r)
+      (string-split salt :what-char #\.)
+  (list
+   (decode-ip encoded-ip)
+   (parse-integer time)
+   delta
+   r)))
+
+(decode-salt
+ (encode-salt "192.168.0.2" (get-unix-time) 450 987))
+ ; => ("192.168.0.2" "1741674000" "450" "987")
+
 (defun generate-challenge (ip)
   (let* ((difficulty (calculate-challenge-difficulty ip))
          (time (get-unix-time))
+         (delta "0000")
          (secret (generate-secret difficulty))
-         (salt (sxhash (format nil "~A~A~A" ip time (random 1000)))))
+         (salt
+           (encrypt *challenge-key*
+                    (encode-salt ip time delta (random 1000)))))
 
     (log-dbg (format nil "Generating challenge: IP ~A TS ~A SECRET ~A"
                      ip time secret))
@@ -640,8 +764,10 @@ to abuse@lazypost.net
 
 (generate-challenge "127.0.0.1")
  ; => (:IP "127.0.0.1" :HASH
- ; "430621b3a0072fcdf4c8413eefad55e7e2d4f940aa5d1f27882f29a199551665" :TIME
- ; 1740851506 :SALT 2184513279468597411 :SECRET 991550)
+ ; "0e0fc3f4c2b68d4a1b5dc1a0fdf239024f8baeff52a0f1da9f96e6e8980df5b5" :TIME
+ ; 1741672748 :SALT
+ ; "43c6b4e9ffeb76faccce8d55d43239db27dc9cef8249d92da9c77982dcf128a63aed704de29c2b8e"
+ ; :SECRET 2114)
 
 (ql:quickload :cl-json)
 
@@ -661,44 +787,14 @@ to abuse@lazypost.net
         (make-challenge
          ip "" unix-time salt secret)))
 
-(defparameter *challenges*
-  (make-hash-table))
-
-(defparameter *challenges-lock*
-  (bt:make-lock "challenges"))
-
 (defun long-ago (old now)
   (local-time:timestamp<
    old
    (local-time:timestamp- now 10 :minute)))
 
-(defun delete-expired-challenge (key value)
-  (let* ((challenge-unixtime (getf value :time))
-         (challenge-ts
-           (local-time:unix-to-timestamp challenge-unixtime)))
-
-    (when (long-ago challenge-ts
-                    (local-time:now))
-      (log-dbg (format nil "Deleting old challenge: IP ~A secret ~A"
-                       (getf value :ip)
-                       (getf value :secret)))
-      (bt:with-lock-held (*challenges-lock*)
-        (remhash key *challenges*)))))
-
-;; (maphash #'delete-expired-challenge *challenges*)
-
-(defun delete-expired-challenges ()
-  (maphash #'delete-expired-challenge *challenges*))
-
 (defun generate-and-store-challenge (ip)
-  (let ((challenge (generate-challenge ip)))
-    (destructuring-bind (&key time salt secret &allow-other-keys)
-        challenge
-
-      (bt:with-lock-held (*challenges-lock*)
-        (store-challenge *challenges* ip time salt secret))
-
-      challenge)))
+  ;; Hey! That's a lie, it doesn't store them!
+  (generate-challenge ip))
 
 (defun handle-challenge-request (env)
   (let ((ip (getf env :remote-addr)))
@@ -712,18 +808,35 @@ to abuse@lazypost.net
        '(:content-type "text/json")
        (list (challenge->json hash (format nil "~A" salt)))))))
 
-(defun verify-challenge-response (client-ip salt answer)
-  (let ((challenge (gethash salt *challenges*)))
-    (when challenge
-      (bt:with-lock-held (*challenges-lock*)
-        (remhash salt *challenges*))    ; No brute-forcing here..
-      (destructuring-bind (&key time secret ip &allow-other-keys)
-          challenge
+(defun decrypt-salt (salt)
+  (decode-salt
+   (decrypt *challenge-key* salt)))
+
+;; TODO: test decrypting:
+;; - tampered data
+;; - wrong key
+(decrypt-salt
+ (encrypt *challenge-key*
+          (encode-salt "192.168.0.2" (get-unix-time) 450 987)))
+ ; => ("192.168.0.2" "1741674405" "450" "987")
+
+(defun verify-challenge-response (client-ip hash salt answer)
+  (handler-case
+      (destructuring-bind (ip time delta r)
+          (decrypt-salt salt)
+        (declare (ignore delta r))
         (and
+         (equalp ip client-ip)
          (not (long-ago (local-time:unix-to-timestamp time)
                         (local-time:now)))
-         (equalp ip client-ip)
-         (= secret answer))))))
+         (equalp hash (compute-challenge salt answer))))
+
+    (t (c)
+      (declare (ignore c))
+      (progn
+        ;; TODO: profile this log message when under load
+        (log-dbg (format nil "Failed challenge for ~A" client-ip))
+        nil))))
 
 (defun param-is-binary? (param)
   ;; http-body returns a cons if the parameter is text and a list
@@ -831,9 +944,10 @@ to abuse@lazypost.net
   (< (length (car image)) 2000000))
 
 (defun correct-answer? (response)
-  (destructuring-bind (&key ip salt answer)
+  (destructuring-bind (&key ip hash salt answer)
       response
     (verify-challenge-response ip
+                               hash
                                (parse-integer salt)
                                (parse-integer answer))))
 
@@ -877,6 +991,7 @@ to abuse@lazypost.net
                                   (getf env :raw-body)))
          (parsed (mapcar #'parse-param params))
          (challenge-rsp (list :ip (getf env :remote-addr)
+                              :hash (read-param parsed :text "h")
                               :salt (read-param parsed :text "s")
                               :answer (read-param parsed :text "a"))))
     ;; (log-dbg (format nil  "processing: ~A%" parsed))
@@ -938,7 +1053,7 @@ to abuse@lazypost.net
                                 :address "0.0.0.0" :port *port*
                                 :debug nil))
 
-(defvar *send-thread* (spawn-send-thread #'delete-expired-challenges))
+(defvar *send-thread* (spawn-send-thread (lambda () nil)))
 
 (ql:quickload :trivial-signal)
 

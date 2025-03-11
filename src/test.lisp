@@ -62,9 +62,9 @@
  ; => T
 
 (let ((challenge (generate-and-store-challenge "0.0.0.0")))
-  (destructuring-bind (&key ip salt secret &allow-other-keys)
+  (destructuring-bind (&key ip hash salt secret &allow-other-keys)
       challenge
-    (verify-challenge-response ip salt 123456)))
+    (verify-challenge-response ip hash salt 123456)))
  ; => NIL
 
 (defun client-compute-challenge (salt hash)
@@ -82,6 +82,13 @@
 (client-compute-challenge 123124 "abcdef1245")
  ; => NIL
 
+(verify-challenge-response
+ "192.168.1.2"
+ "abcd"
+ ";aslkdfjaslkdjf"
+ 1234)
+ ; => NIL
+
 ;; This takes between 1.5 and 3.5 seconds to find the solution
 (time
  (let ((challenge (generate-and-store-challenge "0.0.0.0")))
@@ -89,6 +96,7 @@
        challenge
      (verify-challenge-response
       ip
+      hash
       salt
       (client-compute-challenge salt hash)))))
  ; => T
