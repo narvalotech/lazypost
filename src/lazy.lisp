@@ -796,8 +796,15 @@ to abuse@lazypost.net
   ;; Hey! That's a lie, it doesn't store them!
   (generate-challenge ip))
 
+(defun extract-ip (env)
+  (let ((forwarded-ip
+          (gethash "x-real-ip" (getf env :headers))))
+    (if forwarded-ip
+        forwarded-ip
+        (getf env :remote-addr))))
+
 (defun handle-challenge-request (env)
-  (let ((ip (getf env :remote-addr)))
+  (let ((ip (extract-ip env)))
     (destructuring-bind (&key hash salt &allow-other-keys)
         (generate-and-store-challenge ip)
 
@@ -990,7 +997,7 @@ to abuse@lazypost.net
                                   (getf env :content-length)
                                   (getf env :raw-body)))
          (parsed (mapcar #'parse-param params))
-         (challenge-rsp (list :ip (getf env :remote-addr)
+         (challenge-rsp (list :ip (extract-ip env)
                               :hash (read-param parsed :text "h")
                               :salt (read-param parsed :text "s")
                               :answer (read-param parsed :text "a"))))
