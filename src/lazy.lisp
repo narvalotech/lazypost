@@ -955,7 +955,7 @@ to abuse@lazypost.net
       response
     (verify-challenge-response ip
                                hash
-                               (parse-integer salt)
+                               salt
                                (parse-integer answer))))
 
 (defun error-if-not-valid (postcard challenge-rsp)
