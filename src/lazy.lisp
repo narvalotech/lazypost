@@ -436,18 +436,18 @@ to abuse@lazypost.net
 (defvar *send-interval-s* 3)
 
 (defvar *air-mail* t)
-(defparameter *stop-send-thread* nil)
+(defparameter *stop-app-threads* nil)
 
 (defun sleep-one-eye-open (seconds)
   (let ((small-interval .5)
         (slept 0))
-    (loop while (and (not *stop-send-thread*)
+    (loop while (and (not *stop-app-threads*)
                      (< slept seconds))
           do
              (progn
                (sleep small-interval)
                (incf slept small-interval))))
-  (not *stop-send-thread*))
+  (not *stop-app-threads*))
 
 (defun spawn-send-thread (periodic-fn)
   (setf *date-count* 0)
@@ -983,6 +983,72 @@ to abuse@lazypost.net
                                salt
                                (parse-integer answer))))
 
+;; This table stores a mapping of hash <-> letter ID It could be stored in the
+;; outbox database, but for flexibility we don't do that right now.
+(defparameter *used-challenges* (make-hash-table :test #'equalp))
+
+(defun find-past-challenge (challenge-rsp)
+  (gethash (getf challenge-rsp :hash) *used-challenges*))
+
+(defun store-used-challenge (postcard challenge-rsp)
+  (let ((hash (getf challenge-rsp :hash))
+        (lid (getf postcard :lid)))
+    (setf (gethash hash *used-challenges*)
+          lid)))
+
+(defparameter *banned-ips-writelock* (bt:make-lock))
+(defparameter *banned-ips* nil)
+
+(defun clear-banned-ips ()
+  (bt:with-lock-held (*banned-ips-writelock*)
+    (let ((amount (length *banned-ips*)))
+      (unless (zerop amount)
+        (log-dbg (format nil "Forgiving ~A IPs" amount))))
+
+    (setf *banned-ips*
+          (make-array 100
+                      :element-type '(unsigned-byte 32)
+                      :adjustable t
+                      :fill-pointer 0))))
+
+(clear-banned-ips)
+
+(defvar *forgive-interval-s* 30)
+
+(defun spawn-forgive-thread ()
+  (bt:make-thread
+   (lambda ()
+     (loop while (sleep-one-eye-open *forgive-interval-s*) do
+       (setf *used-challenges* (make-hash-table :test #'equalp))
+       (clear-banned-ips)))
+   :name "Forgive thread"))
+
+(defun decode-be-uint (bytes)
+  (loop for i from 0
+        for byte in (reverse bytes)
+        summing
+        (ash byte (* i 8))))
+
+(defun ip->u32 (ip-str)
+  (decode-be-uint
+   (mapcar #'parse-integer
+           (string-split ip-str :what-char #\.))))
+
+(defun ban-ip (ip-str)
+  (log-dbg (format nil "Banning ~A" ip-str))
+  (bt:with-lock-held (*banned-ips-writelock*)
+    (vector-push-extend
+     (ip->u32 ip-str) *banned-ips*)))
+
+(defun ip-is-banned? (ip-str)
+  (let ((ip (ip->u32 ip-str)))
+    (find-if (lambda (banned-ip) (= banned-ip ip))
+              *banned-ips*)))
+
+(define-condition reused-challenge-error
+                  (error)
+                  ((lid :initarg :lid)))
+
 (defun error-if-not-valid (postcard challenge-rsp)
   (destructuring-bind (&key
                          src-country
@@ -992,6 +1058,10 @@ to abuse@lazypost.net
                          image
                        &allow-other-keys)
       postcard
+
+    (when (find-past-challenge challenge-rsp)
+      (error 'reused-challenge-error
+             :lid (find-past-challenge challenge-rsp)))
 
     (unless (correct-answer? challenge-rsp)
       (error "Incorrect or stale challenge answer"))
@@ -1038,8 +1108,16 @@ to abuse@lazypost.net
                            (read-param parsed :text "message")
                            :image (read-param parsed :image "picture"))))
             (error-if-not-valid postcard challenge-rsp)
+            (store-used-challenge postcard challenge-rsp)
             (send-postcard (add-dates postcard))
             (postcard-sent)))
+
+      (reused-challenge-error (err)
+        (log-wrn (format nil "~A attempted to re-use challenge" (extract-ip env)))
+        (destroy-letter (slot-value err 'lid))
+        (ban-ip (extract-ip env))
+        (postcard-not-sent "Heeey, no cheatin'"))
+
       ;; TODO: add invalid country as a custom error
       (t (c)
         (progn
@@ -1055,6 +1133,10 @@ to abuse@lazypost.net
 (defun response (env)
   ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
   ;; (break)
+
+  ;; yougetnothing.jpg
+  (when (ip-is-banned? (extract-ip env))
+    (return-from response (list 400 nil)))
 
   (cond
     ((eql :post (getf env :request-method))
@@ -1086,6 +1168,7 @@ to abuse@lazypost.net
                                 :debug nil))
 
 (defvar *send-thread* (spawn-send-thread (lambda () nil)))
+(defvar *forgive-thread* (spawn-forgive-thread))
 
 (ql:quickload :trivial-signal)
 
@@ -1097,8 +1180,11 @@ to abuse@lazypost.net
   (clack:stop *webapp*)
 
   (log-inf "Stopping email thread")
-  (setf *stop-send-thread* t)
+  (setf *stop-app-threads* t)
   (bt:join-thread *send-thread*)
+
+  (log-inf "Stopping forgive thread")
+  (bt:join-thread *forgive-thread*)
 
   (log-inf "Done")
   (finish-output *error-output*)

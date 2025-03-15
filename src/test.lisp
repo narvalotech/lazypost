@@ -100,3 +100,17 @@
       salt
       (client-compute-challenge salt hash)))))
  ; => T
+
+(ban-ip "192.168.20.10")
+ ; => 1 (1 bit, #x1, #o1, #b1)
+(ban-ip "192.168.21.10")
+ ; => 2 (2 bits, #x2, #o2, #b10)
+(ip-is-banned? "192.168.20.10")
+ ; => 3232240650 (32 bits, #xC0A8140A)
+(ip-is-banned? "192.168.21.10")
+ ; => 3232240906 (32 bits, #xC0A8150A)
+(ip-is-banned? "10.168.20.10")
+ ; => NIL
+
+(ip->u32 "192.168.10.100")
+ ; => 3232238180 (32 bits, #xC0A80A64)
