@@ -322,21 +322,46 @@
 
 (defvar *send-page-path* "/send")
 
-(defun message-footer (src-email)
-  (format nil "~%
+(defun how-fast? (postcard)
+  (let* ((delivery (local-time:parse-timestring (getf postcard :delivery-date)))
+         (sent (local-time:parse-timestring (getf postcard :sent-date)))
+         (travel-time-days
+           (round
+            (/ (local-time:timestamp-difference delivery sent) 60 60 24))))
+    (if (zerop travel-time-days)
+        "less than a day"
+        (format nil "only ~A days" travel-time-days))))
+
+(how-fast? '(:delivery-date "2025-03-10" :sent-date "2025-02-27"))
+ ; => "only 11 days"
+
+(how-fast? '(:delivery-date "2025-02-27" :sent-date "2025-02-27"))
+ ; => "less than a day"
+
+(defun message-footer (postcard)
+  (destructuring-bind (&key
+                         src-email
+                         src-country
+                         dst-country
+                       &allow-other-keys)
+      postcard
+    (format nil "~%
 ------------------
 This postcard was sent by ~A through lazypost.net
 To send one back, go to lazypost.net~A
 
+It travelled from ~A to ~A in ~A!
+
 If you think this is SPAM, please forward this email
 to abuse@lazypost.net
 "
-          src-email
-          *send-page-path*))
+            src-email
+            *send-page-path*
+            src-country dst-country (how-fast? postcard))))
 
-(defun append-footer (text src-email)
+(defun append-footer (text postcard)
   (concatenate 'string
-               text (message-footer src-email)))
+               text (message-footer postcard)))
 
 (defun deliver-postcard (postcard)
   (destructuring-bind (&key
@@ -357,7 +382,7 @@ to abuse@lazypost.net
           (*use-sendgrid* (send-email-sendgrid
                            src-email "The Lazypost Company"
                            dst-email (make-subject postcard)
-                           (append-footer text src-email)
+                           (append-footer text postcard)
                            attached-file))
 
           (*use-smtp* (send-email-smtp
