@@ -219,7 +219,6 @@
 
 (defun send-postcard (postcard)
   "Send a delayed postcard. Only accepts text."
-  ;; FIXME: validate postcard before adding it
   (when (postcard-valid? postcard)
     (log-inf (format nil  "[~A] Queue: ~A -> ~A"
                      (getf postcard :lid)
@@ -266,7 +265,6 @@
 
 (defvar *use-sendgrid* nil)
 
-;; TODO: use BT:WITH-TIMEOUT on this. I've seen it get stuck sometimes.
 (defun send-email-sendgrid (from name to subject message &optional attached-file)
   (if attached-file
       (sendgrid:send-email :to to
@@ -819,9 +817,6 @@ to abuse@lazypost.net
   (decode-salt
    (decrypt *challenge-key* salt)))
 
-;; TODO: test decrypting:
-;; - tampered data
-;; - wrong key
 (decrypt-salt
  (encrypt *challenge-key*
           (encode-salt "192.168.0.2" (get-unix-time) 450 987)))
