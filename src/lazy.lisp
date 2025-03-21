@@ -2,6 +2,7 @@
 (defparameter *use-db* t)
 
 (ql:quickload :local-time)
+(ql:quickload :bordeaux-threads)
 
 (defparameter *log-levels*
   '(:tra (5 "TRAC")
@@ -163,9 +164,12 @@
 (defun dump-db (db)
   (sqlite:execute-to-list db "SELECT * FROM outbox"))
 
+(defvar *db-lock* (bt:make-lock))
+
 (defun init-db (path)
-  (sqlite:with-open-database (db path)
-    (ignore-errors (create-db-table db))))
+  (bt:with-lock-held (*db-lock*)
+    (sqlite:with-open-database (db path)
+      (ignore-errors (create-db-table db)))))
 
 (defparameter *db-path* (project-file "data/db.sqlite"))
 
@@ -212,10 +216,11 @@
     (getf postcard :delivery-date) :fail-on-error nil)))
 
 (defun push-to-outbox (postcard)
-  (if *use-db*
-      (sqlite:with-open-database (db *db-path*)
+  (bt:with-lock-held (*db-lock*)
+    (if *use-db*
+        (sqlite:with-open-database (db *db-path*)
           (insert-letter-in-db db postcard))
-      (push postcard *the-post*)))
+        (push postcard *the-post*))))
 
 (defun send-postcard (postcard)
   "Send a delayed postcard. Only accepts text."
@@ -313,10 +318,11 @@
 
 (defun destroy-letter (lid)
   (log-dbg (format nil "Deleting letter ~A" lid))
-  (if *use-db*
-      (sqlite:with-open-database (db *db-path*)
-        (delete-db-row-from-lid db lid))
-      (pull-lid-from-the-post lid)))
+  (bt:with-lock-held (*db-lock*)
+    (if *use-db*
+        (sqlite:with-open-database (db *db-path*)
+          (delete-db-row-from-lid db lid))
+        (pull-lid-from-the-post lid))))
 
 (defparameter *send-timeout* 3)
 
@@ -406,10 +412,11 @@ to abuse@lazypost.net
      (:day 2))))
 
 (defun pull-from-outbox (time)
-  (if *use-db*
-      (sqlite:with-open-database (db *db-path*)
-        (peek-letters-from-db db (format-date time)))
-      (peek-from-the-post time)))
+  (bt:with-lock-held (*db-lock*)
+    (if *use-db*
+        (sqlite:with-open-database (db *db-path*)
+          (peek-letters-from-db db (format-date time)))
+        (peek-from-the-post time))))
 
 (defparameter *date-count* 0)
 
@@ -425,8 +432,6 @@ to abuse@lazypost.net
 (defun send-scheduled-postcards (time)
   (log-trace (format nil  "Delivering letters: ~A..." time))
   (mapcar #'deliver-postcard (pull-from-outbox time)))
-
-(ql:quickload :bordeaux-threads)
 
 (defvar *send-interval-s* 3)
 
