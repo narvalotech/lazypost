@@ -1,0 +1,28 @@
+services:
+  lazypost:
+    image: nvl-sbcl:lazypost
+    container_name: lazypost
+    restart: ${RESTART_MODE}
+    command: sbcl --non-interactive --load .env-docker-testing.lisp --load src/lazy.lisp --eval "(install-handlers-and-run)"
+    #user: "1000:1000"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../:/app
+      - /tmp/lazypost:/app/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    image: nginx:alpine
+    container_name: embouteillage
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - lazypost

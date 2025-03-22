@@ -1163,9 +1163,24 @@ to abuse@lazypost.net
 
 (defvar *port* 8000)
 
-(defvar *webapp* (clack:clackup 'response
-                                :address "0.0.0.0" :port *port*
-                                :debug nil))
+(defvar *speeeeeed* nil)
+(defvar *webapp* nil)
+
+(setf *webapp*
+      (if *speeeeeed*
+          (progn
+            (ql:quickload :woo)
+            (clack:clackup #'response
+                           :address "0.0.0.0" :port *port*
+                           :debug nil
+                           :server :woo
+                           :silent t
+                           :use-default-middlewares nil))
+          (progn
+            (clack:clackup 'response
+                           :address "0.0.0.0" :port *port*
+                           :silent t
+                           :debug nil))))
 
 (defvar *send-thread* (spawn-send-thread (lambda () nil)))
 (defvar *forgive-thread* (spawn-forgive-thread))
