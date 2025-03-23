@@ -1,12 +1,12 @@
 FROM clfoundation/sbcl:2.2.4-slim
 ARG QUICKLISP_DIST_VERSION=2024-10-12
 
-WORKDIR /app
-COPY . /app
-
 ADD https://beta.quicklisp.org/quicklisp.lisp /root/quicklisp.lisp
 
-RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y sqlite3 gcc ca-certificates
+RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y sqlite3 gcc ca-certificates libev4
+
+WORKDIR /app
+COPY . /app
 
 RUN set -x; \
   sbcl --load /root/quicklisp.lisp \

@@ -10,3 +10,4 @@
 (ql:quickload :cl-json)
 (ql:quickload :clack)
 (ql:quickload :trivial-signal)
+(ql:quickload :woo)
