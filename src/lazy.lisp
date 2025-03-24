@@ -1124,11 +1124,9 @@ to abuse@lazypost.net
           (log-err (format nil "Got exception when processing ~a: ~a" params c))
           (postcard-not-sent (format nil "~a" c)))))))
 
-(defun handle-homepage (&optional context)
-  (list 200 '(:content-type "text/plain; charset=utf-8")
-        (if context
-            (list context)
-            '("Nothing here yet.."))))
+(defun handle-homepage ()
+  (list 200 '(:content-type "text/html")
+        (project-file "front/about.html")))
 
 (defun response (env)
   ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
