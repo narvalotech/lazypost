@@ -577,14 +577,54 @@ to abuse@lazypost.net
             (list context)
             '("[400] ilo li sona ala"))))
 
+(defvar *hashtag-blessed* nil)
+
+;; From the CL cookbook
+(defun recurse-files (dir)
+  (let ((results))
+    (uiop:collect-sub*directories
+     dir
+     (constantly t)
+     (constantly t)
+     (lambda (subdir)
+       (setf results
+             (nconc results
+                    ;; A detail: we return strings, not pathnames.
+                    (loop for path in (append (uiop:subdirectories subdir)
+                                              (uiop:directory-files subdir))
+                          collect (namestring path))))))
+    results))
+
+(defun bless-files ()
+  (setf *hashtag-blessed*
+        (make-array 200
+                    :element-type '(unsigned-byte 64)
+                    :adjustable t
+                    :fill-pointer 0))
+  (mapcar
+   (lambda (pathstr) (vector-push-extend (sxhash pathstr) *hashtag-blessed*))
+   (recurse-files (project-file "front/"))))
+
+;; Re-run this when the file list changes
+(bless-files)
+
+;; Only works for absolute paths (absoluteunit.jpg)
+(defun blessed? (path)
+  (if (find (sxhash (uiop:unix-namestring path)) *hashtag-blessed*)
+      ;; Apparently I can't program
+      t
+      nil))
+
+;; (blessed? (project-file "front/about.html"))
+ ; => T
+
 (defun static-file (filename)
   (project-file (concatenate 'string "front/" filename)))
 
 (defun handle-static (env)
   ;; TODO: check that request targets localhost
-  (let* ((filename (getf env :path-info))
-         (ttt (search ".." filename)))
-    (if ttt
+  (let* ((filename (getf env :path-info)))
+    (if (not (blessed? (static-file filename)))
         (handle-error)                  ; 100% secure, nothing to see here
         (list
          200
