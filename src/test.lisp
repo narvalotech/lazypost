@@ -27,6 +27,7 @@
         (dst-name (nth (random (length *names*)) *names*))
         (greeting (nth (random (length *greetings*)) *greetings*)))
     (list
+     :lid (generate-letter-id)
      :src-country src-country
      :dst-country dst-country
      :src-email (format nil "~A@lazypost.net" src-name)
