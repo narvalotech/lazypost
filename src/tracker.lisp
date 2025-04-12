@@ -199,6 +199,34 @@
     ))
  (get-all-letters))
 
+;; --------------
+;; Override SKETCH's init to provide the :hidden flag
+(defvar *headless* nil)
+(when *headless*
+  (in-package #:sketch)
+  (defmethod initialize-instance :after ((instance sketch) &rest initargs &key &allow-other-keys)
+    (apply #'prepare instance initargs)
+    (setf (sketch-%window instance)
+          (make-instance 'sketch-window
+                         :title (sketch-title instance)
+                         :w (sketch-width instance)
+                         :h (sketch-height instance)
+                         :fullscreen (sketch-fullscreen instance)
+                         :resizable (sketch-resizable instance)
+                         :sketch instance
+                         :flags '(:hidden)))
+    (initialize-environment instance)
+    (initialize-gl instance)
+    ;; These will have been added in the call to PREPARE.
+    (with-slots ((fs %delayed-init-funs)) instance
+      (loop for f across fs
+            do (funcall f))
+      (setf fs (make-array 0 :adjustable t :fill-pointer t))))
+
+  (in-package :cl-user)
+  )
+;; --------------
+
 (sketch:defsketch image-test
     ((sketch:title "Letter Tracker")
      (sketch:width (+ 0 *img-width*))

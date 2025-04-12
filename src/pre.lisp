@@ -1,5 +1,7 @@
 (require 'asdf)
-(require :slynk)
+
+;; (require :slynk)
+(ql:quickload :slynk)
 
 (defun slynk-listener-thread-p (thread)
   "Check if the given thread is a Slynk listener thread."
