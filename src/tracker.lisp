@@ -51,7 +51,11 @@
 (defun dump-db (db)
   (sqlite:execute-to-list db "SELECT * FROM outbox"))
 
-(defparameter *db-path* (project-file "data/db.sqlite"))
+;; Operate on copy to not induce errors into LazyPost itself
+(uiop:copy-file (project-file "data/db.sqlite")
+                (project-file "data/db-copy.sqlite"))
+
+(defparameter *db-path* (project-file "data/db-copy.sqlite"))
 
 (defun get-all-letters ()
   (mapcar 'make-letter-from-db-row
