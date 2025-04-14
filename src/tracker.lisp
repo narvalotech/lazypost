@@ -252,7 +252,7 @@
 
   (when save-image
     (setf save-image nil)
-    (sketch:save-png "map.png"))
+    (sketch:save-png "front/assets/images/tracker.png"))
   )
 
 (defparameter *sketch* (make-instance 'image-test))

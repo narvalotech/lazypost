@@ -1168,6 +1168,12 @@ to abuse@lazypost.net
   (list 200 '(:content-type "text/html")
         (project-file "front/about.html")))
 
+(defun serve-transit-map ()
+  (list
+   200
+   nil
+   (static-file "assets/images/tracker.png")))
+
 (defun response (env)
   ;; (log-dbg (format nil  "query-string: ~A" (getf env :query-string)))
   ;; (break)
@@ -1191,6 +1197,8 @@ to abuse@lazypost.net
        ("/index.html" (handle-error))
 
        ("/" (handle-homepage))
+
+       ("/transit" (serve-transit-map))
 
        (t (handle-static env))
        ))
