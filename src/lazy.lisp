@@ -326,8 +326,6 @@
 
 (defparameter *send-timeout* 3)
 
-(defvar *send-page-path* "/send")
-
 (defun how-fast? (postcard)
   (let* ((delivery (local-time:parse-timestring (getf postcard :delivery-date)))
          (sent (local-time:parse-timestring (getf postcard :sent-date)))
@@ -354,7 +352,7 @@
     (format nil "~%
 ------------------
 This postcard was sent by ~A through lazypost.net
-To send one back, go to lazypost.net~A
+To send one back, head on over to lazypost.net 🛩️
 
 It travelled from ~A to ~A in ~A!
 
@@ -362,7 +360,6 @@ If you think this is SPAM, please forward this email
 to abuse@lazypost.net
 "
             src-email
-            *send-page-path*
             src-country dst-country (how-fast? postcard))))
 
 (defun append-footer (text postcard)
@@ -1164,9 +1161,8 @@ to abuse@lazypost.net
           (log-err (format nil "Got exception when processing ~a: ~a" params c))
           (postcard-not-sent (format nil "~a" c)))))))
 
-(defun handle-homepage ()
-  (list 200 '(:content-type "text/html")
-        (project-file "front/about.html")))
+(defun handle-homepage (env)
+  (handle-send env))
 
 (defun serve-transit-map ()
   (list
@@ -1191,12 +1187,7 @@ to abuse@lazypost.net
 
        ("/request-challenge" (handle-challenge-request env))
 
-       (*send-page-path* (handle-send env))
-
-       ;; TODO: change this to redirect to about page when we have it
-       ("/index.html" (handle-error))
-
-       ("/" (handle-homepage))
+       ("/" (handle-homepage env))
 
        ("/transit" (serve-transit-map))
 
