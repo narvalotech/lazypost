@@ -1135,6 +1135,8 @@ to abuse@lazypost.net
 (generate-letter-id)
  ; => "3948711498-551011"
 
+(defparameter *interactive-debug* nil)
+
 (defun post-post (env)
   (let* ((params (http-body:parse (getf env :content-type)
                                   (getf env :content-length)
@@ -1145,7 +1147,25 @@ to abuse@lazypost.net
                               :salt (read-param parsed :text "s")
                               :answer (read-param parsed :text "a"))))
     ;; (log-dbg (format nil  "processing: ~A%" parsed))
-    (handler-case
+    (handler-bind
+        ((reused-challenge-error
+           (lambda (err)
+             (log-wrn (format nil "~A attempted to re-use challenge" (extract-ip env)))
+             (destroy-letter (slot-value err 'lid))
+             (ban-ip (extract-ip env))
+             (return-from post-post
+               (postcard-not-sent "Heeey, no cheatin'"))))
+
+         (error (lambda (c)
+                  (log-err (format nil "[~a] Got exception when processing ~a: ~a"
+                                   (extract-ip env) params c))
+
+                  (when *interactive-debug*
+                    (break))
+
+                  (return-from post-post
+                    (postcard-not-sent (format nil "~a" c))))))
+
         (progn
           (let ((postcard (make-postcard
                            (generate-letter-id)
@@ -1158,19 +1178,7 @@ to abuse@lazypost.net
             (error-if-not-valid postcard challenge-rsp)
             (store-used-challenge postcard challenge-rsp)
             (send-postcard (add-dates postcard))
-            (postcard-sent)))
-
-      (reused-challenge-error (err)
-        (log-wrn (format nil "~A attempted to re-use challenge" (extract-ip env)))
-        (destroy-letter (slot-value err 'lid))
-        (ban-ip (extract-ip env))
-        (postcard-not-sent "Heeey, no cheatin'"))
-
-      ;; TODO: add invalid country as a custom error
-      (t (c)
-        (progn
-          (log-err (format nil "Got exception when processing ~a: ~a" params c))
-          (postcard-not-sent (format nil "~a" c)))))))
+            (postcard-sent))))))
 
 (defun handle-homepage (env)
   (handle-send env))
