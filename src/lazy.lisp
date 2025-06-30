@@ -513,7 +513,7 @@ to abuse@lazypost.net
     (setf dist (* dist 60 1.1515))
     ;; convert to kilometers
     (setf dist (* dist 1.609344))
-    dist))
+    (realpart dist)))
 
 (defun country-distance (c1 c2)
   "Calculate straight-line distance between two countries"
@@ -522,6 +522,11 @@ to abuse@lazypost.net
         (lat2 (getf c2 :lat))
         (lon2 (getf c2 :lon)))
     (distance? lat1 lon1 lat2 lon2)))
+
+(country-distance
+ (find-country *country-db* "Andorra")
+ (find-country *country-db* "Andorra"))
+ ; => 0.0d0
 
 (country-distance
  (find-country *country-db* "Norway")
@@ -534,6 +539,12 @@ to abuse@lazypost.net
 (defun delivery-time (distance-km)
   "Estimate delivery time (in days) given a distance (in km)"
   (round (* *days-per-km* distance-km)))
+
+(delivery-time
+ (country-distance
+  (find-country *country-db* "Andorra")
+  (find-country *country-db* "Andorra")))
+ ; => 0, 0.0d0
 
 (delivery-time
  (country-distance
