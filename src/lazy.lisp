@@ -1086,6 +1086,14 @@ to abuse@lazypost.net
                   (error)
                   ((lid :initarg :lid)))
 
+(defun has-challenge? (response)
+  (destructuring-bind (&key hash salt answer &allow-other-keys)
+      response
+    (loop for el in (list hash salt answer) do
+          (when el
+            (when (> (length el) 0)
+              (return-from has-challenge? t))))))
+
 (defun error-if-not-valid (postcard challenge-rsp)
   (destructuring-bind (&key
                          src-country
@@ -1099,6 +1107,9 @@ to abuse@lazypost.net
     (when (find-past-challenge challenge-rsp)
       (error 'reused-challenge-error
              :lid (find-past-challenge challenge-rsp)))
+
+    (unless (has-challenge? challenge-rsp)
+      (error "Pas de bras pas de chocolat" ))
 
     (unless (correct-answer? challenge-rsp)
       (error "Incorrect or stale challenge answer"))
